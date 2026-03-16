@@ -1,37 +1,37 @@
-name: T113 Android 10 (Sıfır Hata & Auto-Release)
+name: T113 Android 10 (Efe Tech Oto-Pilot)
 on: [workflow_dispatch]
 
-# Release yükleyebilmek için yazma yetkisi ŞART aga!
+# Release yükleyebilmek için gerekli izin
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: ubuntu-20.04 # En stabil derleme ortamı
+    runs-on: ubuntu-22.04 # GitHub kuyruklarına takılmayan hızlı sunucu
     steps:
-      - name: Alanı Temizle ve Hazırla
+      - name: Alanı Temizle
         uses: actions/checkout@v4
 
-      - name: Gerekli Paketleri Kur
+      - name: ⚙️ Gerekli Paketleri Kur
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python2 libssl-dev openjdk-8-jdk
           mkdir ~/bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
 
-      - name: LineageOS 17.1 (Android 10) Kaynak Kodunu Çek
+      - name: 📥 LineageOS 17.1 (Android 10) Kodlarını Çek
         run: |
           export PATH=$PATH:~/bin
           repo init -u https://github.com/LineageOS/android.git -b lineage-17.1 --depth=1
           
-          # Senin verdiğin Goyave Ağacı
+          # Goyave Ağacı
           git clone https://github.com/TeamWin/android_device_samsung_goyave.git -b android-7.1 device/samsung/goyave
-          # Sc8830 Ortak Ağacı
+          # Sc8830 Ortak Ağacı (Bootloop engellemek için şart)
           git clone https://github.com/samsung-sc8830/android_device_samsung_sc8830-common.git -b lineage-15.1 device/samsung/sc8830-common
           
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-      - name: 🛡️ EFE TECH OTO-DÜZELTME & SIFIR HATA MOTORU
+      - name: 🛡️ Efe Tech Oto-Düzeltme & Sıfır Hata Motoru
         run: |
           # 1. TWRP dosyalarını LineageOS formatına çevir
           mv device/samsung/goyave/omni_goyave.mk device/samsung/goyave/lineage_goyave.mk
@@ -41,28 +41,28 @@ jobs:
           # 2. Tablet konfigürasyonunu Lineage'e uydur
           sed -i 's/vendor\/omni\/config\/common_tablet.mk/vendor\/lineage\/config\/common_full_tablet_wifionly.mk/g' device/samsung/goyave/lineage_goyave.mk
           
-          # 3. Android 10 Spreadtrum Yamaları (Bootloop engeller, hatasız derler)
+          # 3. Android 10 Spreadtrum Yamaları (Eski kodları temizle)
           sed -i '/TARGET_CPU_SMP := true/d' device/samsung/goyave/BoardConfig.mk
           echo "TARGET_USES_64_BIT_BINDER := true" >> device/samsung/goyave/BoardConfig.mk
 
-      - name: ROM'u Derle (Bacon)
+      - name: 🚀 ROM'u Derle (Bacon)
         run: |
           source build/envsetup.sh
-          # Artık omni değil, lineage olarak derliyoruz!
+          # Artık sistem omni değil, lineage olarak görecek
           lunch lineage_goyave-userdebug
           mka bacon -j$(nproc --all)
 
-      - name: 📦 Artifact Olarak Yedekle
+      - name: 📦 Artifact Olarak Yedekle (V4 - Hatasız)
         uses: actions/upload-artifact@v4
         with:
           name: T113-Android10-EfeTech
           path: out/target/product/goyave/*.zip
 
-      - name: 🚀 GitHub Releases'e Otomatik Yükle
+      - name: 🎉 GitHub Releases'e Otomatik Yükle
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "EfeTech-V3-${{ github.run_id }}"
-          name: "Tab 3 Lite (T113) Android 10 - Sıfır Hata Sürümü"
+          tag_name: "EfeTech-Final-${{ github.run_id }}"
+          name: "Tab 3 Lite (T113) Android 10 - Oto-Pilot Sürümü"
           body: "Efe Tech oto-düzeltme motoru ile derlenmiş Android 10 (LineageOS 17.1) Custom ROM."
           files: out/target/product/goyave/*.zip
         env:
