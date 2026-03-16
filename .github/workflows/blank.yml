@@ -1,46 +1,48 @@
-name: T113 Android 10 Build (Oklava Savar)
+name: T113 Android 10 Build - V1
 on: [workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest # Beklemeyi bitiren güncel runner
     steps:
-      - name: Alanı Temizle ve Hazırla
+      - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Gerekli Paketleri Kur
+      - name: Sistem Hazırlığı
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python python3 libssl-dev
-
-      - name: Repo Aracını Kur
-        run: |
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 libssl-dev
           mkdir ~/bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
-          export PATH=$PATH:~/bin
 
-      - name: Kaynak Kodları Çek (LineageOS 10)
+      - name: Kaynak Kodları ve Sync (Lineage 17.1)
         run: |
+          export PATH=$PATH:~/bin
           repo init -u https://github.com/LineageOS/android.git -b lineage-17.1 --depth=1
-          mkdir -p .repo/local_manifests
-          cp goyave.xml .repo/local_manifests/
+          
+          # Senin verdiğin 7.1 ağacını çekip V1 için hazırlıyoruz
+          git clone https://github.com/TeamWin/android_device_samsung_goyave.git -b android-7.1 device/samsung/goyave
+          
+          # Bootloop önleyici ortak ağaç
+          git clone https://github.com/samsung-sc8830/android_device_samsung_sc8830-common.git -b lineage-15.1 device/samsung/sc8830-common
+          
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-      - name: 7.1 Ağacını 10'a Yamala (Kritik Hamle!)
+      - name: Android 10 Bootloop Önleyici Yamalar
         run: |
-          # Android 10'da hata veren eski CPU tanımlarını kaldır
-          sed -i 's/TARGET_CPU_SMP := true//g' device/samsung/goyave/BoardConfig.mk
-          # Soong uyumu için Makefile'ları düzelt
+          # V1 Yamaları: BoardConfig içindeki eski Spreadtrum kodlarını temizle
+          sed -i '/TARGET_CPU_SMP := true/d' device/samsung/goyave/BoardConfig.mk
+          echo "TARGET_USES_64_BIT_BINDER := true" >> device/samsung/goyave/BoardConfig.mk
           echo "PRODUCT_SOONG_NAMESPACES += device/samsung/goyave" >> device/samsung/goyave/BoardConfig.mk
 
-      - name: Derlemeyi Başlat
+      - name: Derlemeyi Başlat (V1)
         run: |
           source build/envsetup.sh
           lunch lineage_goyave-userdebug
           mka bacon -j$(nproc --all)
 
-      - name: ROM'u Yükle (Artifact)
+      - name: ROM'u Paylaş
         uses: actions/upload-artifact@v2
         with:
-          name: LineageOS-10-Goyave
+          name: Goyave-T113-Android10-V1
           path: out/target/product/goyave/*.zip
