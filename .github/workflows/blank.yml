@@ -1,0 +1,46 @@
+name: T113 Android 10 Build (Oklava Savar)
+on: [workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Alanı Temizle ve Hazırla
+        uses: actions/checkout@v2
+
+      - name: Gerekli Paketleri Kur
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python python3 libssl-dev
+
+      - name: Repo Aracını Kur
+        run: |
+          mkdir ~/bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          export PATH=$PATH:~/bin
+
+      - name: Kaynak Kodları Çek (LineageOS 10)
+        run: |
+          repo init -u https://github.com/LineageOS/android.git -b lineage-17.1 --depth=1
+          mkdir -p .repo/local_manifests
+          cp goyave.xml .repo/local_manifests/
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: 7.1 Ağacını 10'a Yamala (Kritik Hamle!)
+        run: |
+          # Android 10'da hata veren eski CPU tanımlarını kaldır
+          sed -i 's/TARGET_CPU_SMP := true//g' device/samsung/goyave/BoardConfig.mk
+          # Soong uyumu için Makefile'ları düzelt
+          echo "PRODUCT_SOONG_NAMESPACES += device/samsung/goyave" >> device/samsung/goyave/BoardConfig.mk
+
+      - name: Derlemeyi Başlat
+        run: |
+          source build/envsetup.sh
+          lunch lineage_goyave-userdebug
+          mka bacon -j$(nproc --all)
+
+      - name: ROM'u Yükle (Artifact)
+        uses: actions/upload-artifact@v2
+        with:
+          name: LineageOS-10-Goyave
+          path: out/target/product/goyave/*.zip
