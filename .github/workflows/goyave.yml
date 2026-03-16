@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <project name="TeamWin/android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-7.1" />
+
+  <project name="samsung-sc8830/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="github" revision="lineage-15.1" />
+
+  <project name="T113-Goyave/android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="github" revision="lineage-17.1" />
+  <project name="T113-Goyave/android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="github" revision="lineage-17.1" />
+</manifest>
