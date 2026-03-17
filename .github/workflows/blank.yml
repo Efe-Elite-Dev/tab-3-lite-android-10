@@ -1,32 +1,25 @@
-name: T113 Android 11 GSI-sız Derleme (Efe Tech Lab)
+name: T113 Android 11 TWRP ZIP Build
 
 on:
-  workflow_dispatch: # Manuel tetikleme (Ateşle aga butonu)
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-20.04
-    permissions:
-      contents: write
-
     steps:
-      - name: Sunucuyu Hazırla (Esenyurt Usulü)
+      - name: Sunucuyu Hazırla
         uses: actions/checkout@v3
 
-      - name: Gerekli Paketleri Kur
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo
+      - name: Paketleri Kur
+        run: sudo apt-get update && sudo apt-get install -y zip repo python3
 
-      - name: Repo ve Kaynak Kodları Çek (Android 11 Vanilla)
+      - name: Kaynak Kodları ve T113 Ağaçlarını Çek
         run: |
-          mkdir android-build && cd android-build
+          mkdir build && cd build
           git config --global user.name "Efe"
           git config --global user.email "efe@tech.lab"
-          # Saf Android 11 (AOSP) kodlarını çekiyoruz
           repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1
           
-          # Senin özel T113 (goyave) ağaçlarını ekliyoruz
           mkdir .repo/local_manifests
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
@@ -35,28 +28,37 @@ jobs:
             <project name="android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="github" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
           
-          repo sync -j$(nproc --all) --force-sync --no-tags --no-clone-bundle
+          repo sync -j$(nproc --all) --force-sync
 
-      - name: 10GB Hedefi İçin Sistemi Hafiflet (Debloat)
+      - name: Derlemeyi Başlat (System Image)
         run: |
-          cd android-build
-          # Gereksiz Google servislerini ve dilleri sistemden ayıkla
-          rm -rf vendor/google
-          rm -rf packages/apps/Calendar packages/apps/Email # Bunları sonra APK ile kurarsın
-
-      - name: Derlemeyi Başlat (Ateşle Aga!)
-        run: |
-          cd android-build
+          cd build
           source build/envsetup.sh
           lunch aosp_goyave-userdebug
           make systemimage -j$(nproc --all)
 
-      - name: Yazılımı Paketle ve Yayınla
+      - name: TWRP İçin ZIP Paketi Oluştur (Esenyurt Özel)
+        run: |
+          mkdir flashable_zip
+          cd flashable_zip
+          # Meta-inf ve Script hazırlığı
+          mkdir -p META-INF/com/google/android
+          cp ../build/out/target/product/goyave/system.img .
+          
+          # Basit bir updater-script oluşturuyoruz
+          echo '#!/sbin/sh
+          ui_print("Efe Tech Lab - T113 Android 11 Yukleniyor...");
+          package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");
+          ui_print("Islem Tamam! Reboot et aga.");' > META-INF/com/google/android/update-binary
+          
+          # Dosyayı mühürle
+          zip -r ../T113_Android11_Vanilla_EfeTech.zip .
+
+      - name: ZIP Dosyasını Yayınla
         uses: softprops/action-gh-release@v1
-        if: success()
         with:
-          files: android-build/out/target/product/goyave/system.img
-          tag_name: V8-Vanilla-T113
-          name: T113 Android 11 GSI-sız Mermi Sürümü
+          files: T113_Android11_Vanilla_EfeTech.zip
+          tag_name: V8-TWRP-ZIP
+          name: T113 Android 11 TWRP Flaşlanabilir ZIP
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
