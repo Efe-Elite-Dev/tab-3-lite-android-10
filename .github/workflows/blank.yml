@@ -1,62 +1,62 @@
-name: T113 Android 10 (Sıfır Hata V4)
-on: [workflow_dispatch]
+name: T113 Android 11 GSI-sız Derleme (Efe Tech Lab)
 
-permissions:
-  contents: write
+on:
+  workflow_dispatch: # Manuel tetikleme (Ateşle aga butonu)
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Alanı Temizle
-        uses: actions/checkout@v4
+    runs-on: ubuntu-20.04
+    permissions:
+      contents: write
 
-      - name: ⚙️ Gerekli Paketleri Kur
+    steps:
+      - name: Sunucuyu Hazırla (Esenyurt Usulü)
+        uses: actions/checkout@v3
+
+      - name: Gerekli Paketleri Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python2 libssl-dev openjdk-8-jdk
-          mkdir ~/bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo
 
-      - name: 📥 Kodları Çek (Hata Veren Link Düzeltildi!)
+      - name: Repo ve Kaynak Kodları Çek (Android 11 Vanilla)
         run: |
-          export PATH=$PATH:~/bin
-          repo init -u https://github.com/LineageOS/android.git -b lineage-17.1 --depth=1
+          mkdir android-build && cd android-build
+          git config --global user.name "Efe"
+          git config --global user.email "efe@tech.lab"
+          # Saf Android 11 (AOSP) kodlarını çekiyoruz
+          repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1
           
-          # Goyave Ana Ağacı
-          git clone https://github.com/TeamWin/android_device_samsung_goyave.git -b android-7.1 device/samsung/goyave
+          # Senin özel T113 (goyave) ağaçlarını ekliyoruz
+          mkdir .repo/local_manifests
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+            <project name="android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-11.0" />
+            <project name="android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="github" revision="android-11.0" />
+            <project name="android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="github" revision="android-11.0" />
+          </manifest>' > .repo/local_manifests/goyave.xml
           
-          # İŞTE DÜZELTİLEN YER (omni.dependencies dosyasındaki asıl link)
-          git clone https://github.com/samsung-sc8830/twrp_device_samsung_sc8830-common.git -b android-7.1 device/samsung/sc8830-common
-          
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          repo sync -j$(nproc --all) --force-sync --no-tags --no-clone-bundle
 
-      - name: 🛡️ Efe Tech Oto-Düzeltme Motoru
+      - name: 10GB Hedefi İçin Sistemi Hafiflet (Debloat)
         run: |
-          mv device/samsung/goyave/omni_goyave.mk device/samsung/goyave/lineage_goyave.mk
-          sed -i 's/omni_goyave/lineage_goyave/g' device/samsung/goyave/lineage_goyave.mk
-          sed -i 's/omni_goyave/lineage_goyave/g' device/samsung/goyave/AndroidProducts.mk
-          sed -i 's/vendor\/omni\/config\/common_tablet.mk/vendor\/lineage\/config\/common_full_tablet_wifionly.mk/g' device/samsung/goyave/lineage_goyave.mk
-          sed -i '/TARGET_CPU_SMP := true/d' device/samsung/goyave/BoardConfig.mk
-          echo "TARGET_USES_64_BIT_BINDER := true" >> device/samsung/goyave/BoardConfig.mk
+          cd android-build
+          # Gereksiz Google servislerini ve dilleri sistemden ayıkla
+          rm -rf vendor/google
+          rm -rf packages/apps/Calendar packages/apps/Email # Bunları sonra APK ile kurarsın
 
-      - name: 🚀 ROM'u Derle
+      - name: Derlemeyi Başlat (Ateşle Aga!)
         run: |
+          cd android-build
           source build/envsetup.sh
-          lunch lineage_goyave-userdebug
-          mka bacon -j$(nproc --all)
+          lunch aosp_goyave-userdebug
+          make systemimage -j$(nproc --all)
 
-      - name: 📦 Artifact Olarak Yedekle
-        uses: actions/upload-artifact@v4
-        with:
-          name: T113-Android10-EfeTech
-          path: out/target/product/goyave/*.zip
-
-      - name: 🎉 GitHub Releases'e Otomatik Yükle
+      - name: Yazılımı Paketle ve Yayınla
         uses: softprops/action-gh-release@v1
+        if: success()
         with:
-          tag_name: "EfeTech-V4-${{ github.run_id }}"
-          name: "Tab 3 Lite (T113) Android 10"
-          files: out/target/product/goyave/*.zip
+          files: android-build/out/target/product/goyave/system.img
+          tag_name: V8-Vanilla-T113
+          name: T113 Android 11 GSI-sız Mermi Sürümü
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
