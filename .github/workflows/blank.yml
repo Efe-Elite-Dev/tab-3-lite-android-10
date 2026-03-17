@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-   runs-on: ubuntu-latest # Daha stabil olan eski sürüme çektim, paket hatası vermez
+    runs-on: ubuntu-latest
     permissions:
       contents: write
 
@@ -13,10 +13,13 @@ jobs:
       - name: Sunucuyu Hazırla
         uses: actions/checkout@v3
 
-      - name: Gerekli Paketleri Kur
+      - name: Gerekli Paketleri Kur (24.04 Noble Fix)
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo libncurses5
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo libncurses6 libncursesw6
+          # Eksik libncurses5 yerine 6'yı kandırıp yolumuza devam ediyoruz
+          sudo ln -s /usr/lib/x86_64-linux-gnu/libncurses.so.6 /usr/lib/x86_64-linux-gnu/libncurses.so.5
+          sudo ln -s /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5
 
       - name: Repo ve Kaynak Kodları Çek
         run: |
@@ -24,11 +27,11 @@ jobs:
           git config --global user.name "Efe"
           git config --global user.email "efe@tech.lab"
           
-          # AOSP 11 Kaynağı (Sığ çekim)
+          # AOSP 11 Kaynağı
           repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1
           
-          # Donanım ağaçlarını çekiyoruz (Dalları ve linkleri sabitledim)
           mkdir -p .repo/local_manifests
+          # AOSPT113 linklerini çekiyoruz
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
             <project name="AOSPT113/android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-11.0" />
@@ -37,27 +40,24 @@ jobs:
             <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="github" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
           
-          # Hata verirse devam etmesi için force-sync ekledik
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags || true
 
       - name: Derlemeyi Başlat (System Image)
         run: |
           cd build
           source build/envsetup.sh
-          # Eğer cihaz ağacı yanlış yerdeyse hatayı önlemek için kontrol
-          lunch aosp_goyave-userdebug || echo "Lunch hatasi ama devam ediyoruz..."
+          lunch aosp_goyave-userdebug || echo "Lunch hatasi ama devam..."
           make systemimage -j$(nproc --all)
 
       - name: TWRP Flaşlanabilir ZIP Hazırla
         run: |
           mkdir -p flashable_zip/META-INF/com/google/android
-          # Dosya oluştuysa kopyala
-          [ -f build/out/target/product/goyave/system.img ] && cp build/out/target/product/goyave/system.img flashable_zip/ || echo "System.img bulunamadi!"
+          [ -f build/out/target/product/goyave/system.img ] && cp build/out/target/product/goyave/system.img flashable_zip/ || echo "System.img yok!"
           
           echo '#!/sbin/sh
-          ui_print("T113 Android 11 V8 Yukleniyor...");
+          ui_print("T113 V8 Yukleniyor...");
           package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");
-          ui_print("Bitti aga!");' > flashable_zip/META-INF/com/google/android/update-binary
+          ui_print("Esenyurt Tech Lab bitti der!");' > flashable_zip/META-INF/com/google/android/update-binary
           
           cd flashable_zip && zip -r ../T113_Android11_V8.zip .
 
@@ -65,7 +65,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: T113_Android11_V8.zip
-          tag_name: V8-FIX
+          tag_name: V8-FINAL
           name: T113 Android 11 TWRP ZIP
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
