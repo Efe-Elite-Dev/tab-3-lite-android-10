@@ -1,4 +1,4 @@
-name: T113 Android 11 ZIP Build (Final Link Fix)
+name: T113 Android 11 Nitro Build
 
 on:
   workflow_dispatch:
@@ -13,63 +13,73 @@ jobs:
       - name: Sunucuyu Hazırla
         uses: actions/checkout@v3
 
-      - name: Paket ve Kütüphane Kurulumu
+      - name: 🚀 Hızlandırıcı: Gereksiz Dosyaları Temizle
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /etc/apt/sources.list.d/*
+
+      - name: Paket ve GÜNCEL Repo Kurulumu
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo libncurses6 libncursesw6
+          sudo apt-get install -y bc build-essential zip curl git python3 python-is-python3 libssl-dev libncurses6 libncursesw6 ccache
+          # Manuel Repo Kurulumu (Hata veren launcher'ı bypass et)
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          sudo ln -sf ~/bin/repo /usr/bin/repo
+          # Kütüphane Fix
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libncurses.so.6 /usr/lib/x86_64-linux-gnu/libncurses.so.5
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5
 
-      - name: Kaynak Kodları Çek (HTTPS Link Fix)
+      - name: 📦 Kaynak Kodları Çek (Hızlı Sync)
         run: |
           mkdir build && cd build
           git config --global user.name "Efe"
           git config --global user.email "efe@tech.lab"
           
-          # AOSP Kaynağı
-          repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1
+          # Bundle hatasını bypass ederek init
+          repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1 --no-clone-bundle
           
-          # MANİFEST TAMİRİ: AOSPT113 yerine "Efe-Elite-Dev" veya asıl repo sahibini yazmalısın!
-          # Ben buraya en olası doğru organizasyon ismini/yapısını koyuyorum:
+          # MANİFEST TAMİRİ (Linkleri açıkça belirtiyoruz)
           mkdir -p .repo/local_manifests
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
             <remote name="gh" fetch="https://github.com" />
-            
             <project name="AOSPT113/android_device_samsung_goyave" path="device/samsung/goyave" remote="gh" revision="android-11.0" />
             <project name="AOSPT113/android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="gh" revision="android-11.0" />
             <project name="AOSPT113/android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="gh" revision="android-11.0" />
             <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="gh" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
           
-          # Sync operasyonu (Hata verirse hangi repo olduğunu anlamak için tek tek çekiyoruz)
-          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags
+          # Turbo Sync: Sadece ihtiyacımız olanları, tags olmadan çek
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-      - name: Derlemeyi Başlat
+      - name: 🔥 Derlemeyi Başlat (ccache Aktif)
         run: |
           cd build
-          if [ ! -f build/envsetup.sh ]; then echo "HATA: Kaynak kodlar inmedi! Linkleri kontrol et."; exit 1; fi
+          export USE_CCACHE=1
+          export CCACHE_EXEC=/usr/bin/ccache
           source build/envsetup.sh
           lunch aosp_goyave-userdebug
           make systemimage -j$(nproc --all)
 
-      - name: Paketleme ve Release
+      - name: 🎁 ZIP ve Release
         run: |
           if [ -f build/out/target/product/goyave/system.img ]; then
             mkdir -p flashable_zip/META-INF/com/google/android
             cp build/out/target/product/goyave/system.img flashable_zip/
             echo '#!/sbin/sh
-            ui_print("T113 V8 Yukleniyor...");
-            package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");
-            ui_print("Bitti!");' > flashable_zip/META-INF/com/google/android/update-binary
-            cd flashable_zip && zip -r ../T113_V8.zip .
+            ui_print("T113 V8 Nitro Yuklendi!");
+            package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");' > flashable_zip/META-INF/com/google/android/update-binary
+            cd flashable_zip && zip -r ../T113_V8_Nitro.zip .
           fi
 
-      - name: Release Et
+      - name: Final Release
         uses: softprops/action-gh-release@v1
         with:
-          files: T113_V8.zip
-          tag_name: V8-LINK-FIX
-          name: T113 Android 11 TWRP ZIP
+          files: T113_V8_Nitro.zip
+          tag_name: V8-NITRO
+          name: T113 Android 11 Nitro ZIP
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
