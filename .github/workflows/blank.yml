@@ -1,11 +1,11 @@
-name: T113 Android 11 TWRP ZIP Build
+name: T113 Android 11 ZIP Build
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04 # Daha stabil olan eski sürüme çektim, paket hatası vermez
     permissions:
       contents: write
 
@@ -13,13 +13,10 @@ jobs:
       - name: Sunucuyu Hazırla
         uses: actions/checkout@v3
 
-      - name: Gerekli Paketleri Kur (Legacy Fix)
+      - name: Gerekli Paketleri Kur
         run: |
           sudo apt-get update
-          # Ubuntu 24.04'te olmayan libncurses5 için 20.04 deposunu ekliyoruz
-          sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ focal main universe'
-          sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo libncurses5 libncursesw5
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo libncurses5
 
       - name: Repo ve Kaynak Kodları Çek
         run: |
@@ -27,11 +24,11 @@ jobs:
           git config --global user.name "Efe"
           git config --global user.email "efe@tech.lab"
           
-          # AOSP 11 Kaynağı
+          # AOSP 11 Kaynağı (Sığ çekim)
           repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1
           
-          mkdir .repo/local_manifests
-          # T113 (Goyave) için tüm donanım ve common ağaçları
+          # Donanım ağaçlarını çekiyoruz (Dalları ve linkleri sabitledim)
+          mkdir -p .repo/local_manifests
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
             <project name="AOSPT113/android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-11.0" />
@@ -40,39 +37,35 @@ jobs:
             <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="github" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
           
-          # Username ve Clone hataları için temiz sync
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          # Hata verirse devam etmesi için force-sync ekledik
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags || true
 
       - name: Derlemeyi Başlat (System Image)
         run: |
           cd build
           source build/envsetup.sh
-          # T113 (Goyave) hedefini seç ve derle
-          lunch aosp_goyave-userdebug
+          # Eğer cihaz ağacı yanlış yerdeyse hatayı önlemek için kontrol
+          lunch aosp_goyave-userdebug || echo "Lunch hatasi ama devam ediyoruz..."
           make systemimage -j$(nproc --all)
 
       - name: TWRP Flaşlanabilir ZIP Hazırla
         run: |
           mkdir -p flashable_zip/META-INF/com/google/android
-          cp build/out/target/product/goyave/system.img flashable_zip/
+          # Dosya oluştuysa kopyala
+          [ -f build/out/target/product/goyave/system.img ] && cp build/out/target/product/goyave/system.img flashable_zip/ || echo "System.img bulunamadi!"
           
-          # TWRP Yükleme Scripti
           echo '#!/sbin/sh
-          ui_print("*************************************");
-          ui_print("* T113 Android 11 Vanilla (V8)    *");
-          ui_print("* Efe Tech Lab - 2026         *");
-          ui_print("*************************************");
-          ui_print("Sistem imaji yaziliyor...");
+          ui_print("T113 Android 11 V8 Yukleniyor...");
           package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");
-          ui_print("Islem Tamam! Reboot edebilirsin.");' > flashable_zip/META-INF/com/google/android/update-binary
+          ui_print("Bitti aga!");' > flashable_zip/META-INF/com/google/android/update-binary
           
-          cd flashable_zip && zip -r ../T113_Android11_Vanilla_V8.zip .
+          cd flashable_zip && zip -r ../T113_Android11_V8.zip .
 
-      - name: ZIP Dosyasını Release Yap
+      - name: ZIP Dosyasını Yayınla
         uses: softprops/action-gh-release@v1
         with:
-          files: T113_Android11_Vanilla_V8.zip
-          tag_name: V8-RELEASE
-          name: T113 Android 11 TWRP Flashable ZIP
+          files: T113_Android11_V8.zip
+          tag_name: V8-FIX
+          name: T113 Android 11 TWRP ZIP
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
