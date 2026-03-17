@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-  runs-on: ubuntu-latest # Daha stabil olan eski sürüme çektim, paket hatası vermez
+   runs-on: ubuntu-latest # Daha stabil olan eski sürüme çektim, paket hatası vermez
     permissions:
       contents: write
 
