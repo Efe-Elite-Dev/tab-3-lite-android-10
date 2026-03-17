@@ -1,34 +1,44 @@
-name: T113 Android 11 TWRP ZIP Build
+name: T113 Android 11 TWRP ZIP Build (Efe Tech Lab)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manuel ateşleme butonu
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - name: Sunucuyu Hazırla
         uses: actions/checkout@v3
 
-      - name: Paketleri Kur
-        run: sudo apt-get update && sudo apt-get install -y zip repo python3
+      - name: Gerekli Paketleri Kur
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo libncurses5
 
-      - name: Kaynak Kodları ve T113 Ağaçlarını Çek
+      - name: Repo ve Kaynak Kodları Çek (Hata Giderilmiş)
         run: |
           mkdir build && cd build
           git config --global user.name "Efe"
           git config --global user.email "efe@tech.lab"
-          repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1
+          
+          # Derinliği 1 yaparak hızlı çekiyoruz
+          repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1
           
           mkdir .repo/local_manifests
+          # T113 için gerekli tüm donanım ağaçlarını buraya ekledik
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
-            <project name="android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-11.0" />
-            <project name="android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="github" revision="android-11.0" />
-            <project name="android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="github" revision="android-11.0" />
+            <project name="AOSPT113/android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-11.0" />
+            <project name="AOSPT113/android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="github" revision="android-11.0" />
+            <project name="AOSPT113/android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="github" revision="android-11.0" />
+            <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="github" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
           
-          repo sync -j$(nproc --all) --force-sync
+          # "fatal: could not read Username" hatasını aşmak için --no-clone-bundle ekledik
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Derlemeyi Başlat (System Image)
         run: |
@@ -37,28 +47,28 @@ jobs:
           lunch aosp_goyave-userdebug
           make systemimage -j$(nproc --all)
 
-      - name: TWRP İçin ZIP Paketi Oluştur (Esenyurt Özel)
+      - name: TWRP İçin ZIP Paketi Oluştur (10GB Hedefli)
         run: |
-          mkdir flashable_zip
-          cd flashable_zip
-          # Meta-inf ve Script hazırlığı
-          mkdir -p META-INF/com/google/android
-          cp ../build/out/target/product/goyave/system.img .
+          mkdir output
+          mkdir -p flashable_zip/META-INF/com/google/android
+          cp build/out/target/product/goyave/system.img flashable_zip/
           
-          # Basit bir updater-script oluşturuyoruz
+          # TWRP Scripti
           echo '#!/sbin/sh
-          ui_print("Efe Tech Lab - T113 Android 11 Yukleniyor...");
+          ui_print("--------------------------------------");
+          ui_print("     Efe Tech Lab T113 AOSP 11      ");
+          ui_print("--------------------------------------");
+          ui_print("Sistem yukleniyor...");
           package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");
-          ui_print("Islem Tamam! Reboot et aga.");' > META-INF/com/google/android/update-binary
+          ui_print("Islem Basarili! Cihazi yeniden baslat.");' > flashable_zip/META-INF/com/google/android/update-binary
           
-          # Dosyayı mühürle
-          zip -r ../T113_Android11_Vanilla_EfeTech.zip .
+          cd flashable_zip && zip -r ../output/T113_Android11_Vanilla_V8.zip .
 
       - name: ZIP Dosyasını Yayınla
         uses: softprops/action-gh-release@v1
         with:
-          files: T113_Android11_Vanilla_EfeTech.zip
-          tag_name: V8-TWRP-ZIP
-          name: T113 Android 11 TWRP Flaşlanabilir ZIP
+          files: output/T113_Android11_Vanilla_V8.zip
+          tag_name: V8-RELEASE
+          name: T113 Android 11 TWRP Flashable ZIP
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
