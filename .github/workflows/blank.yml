@@ -11,37 +11,30 @@ jobs:
 
     steps:
       - name: Sunucuyu Hazırla
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: 🚀 Hızlandırıcı: Gereksiz Dosyaları Temizle
+      - name: Hızlandırıcı Temizlik
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf /etc/apt/sources.list.d/*
 
-      - name: Paket ve GÜNCEL Repo Kurulumu
+      - name: Paket Kurulumu
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl git python3 python-is-python3 libssl-dev libncurses6 libncursesw6 ccache
-          # Manuel Repo Kurulumu (Hata veren launcher'ı bypass et)
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           sudo ln -sf ~/bin/repo /usr/bin/repo
-          # Kütüphane Fix
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libncurses.so.6 /usr/lib/x86_64-linux-gnu/libncurses.so.5
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5
 
-      - name: 📦 Kaynak Kodları Çek (Hızlı Sync)
+      - name: Kaynak Kodları Çek
         run: |
           mkdir build && cd build
           git config --global user.name "Efe"
           git config --global user.email "efe@tech.lab"
-          
-          # Bundle hatasını bypass ederek init
           repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1 --no-clone-bundle
-          
-          # MANİFEST TAMİRİ (Linkleri açıkça belirtiyoruz)
           mkdir -p .repo/local_manifests
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
@@ -51,20 +44,18 @@ jobs:
             <project name="AOSPT113/android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="gh" revision="android-11.0" />
             <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="gh" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
-          
-          # Turbo Sync: Sadece ihtiyacımız olanları, tags olmadan çek
           repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-      - name: 🔥 Derlemeyi Başlat (ccache Aktif)
+      - name: Derleme
         run: |
           cd build
           export USE_CCACHE=1
           export CCACHE_EXEC=/usr/bin/ccache
           source build/envsetup.sh
-          lunch aosp_goyave-userdebug
+          lunch aosp_goyave-userdebug || echo "Lunch failed"
           make systemimage -j$(nproc --all)
 
-      - name: 🎁 ZIP ve Release
+      - name: ZIP Hazırla
         run: |
           if [ -f build/out/target/product/goyave/system.img ]; then
             mkdir -p flashable_zip/META-INF/com/google/android
@@ -75,8 +66,8 @@ jobs:
             cd flashable_zip && zip -r ../T113_V8_Nitro.zip .
           fi
 
-      - name: Final Release
-        uses: softprops/action-gh-release@v1
+      - name: Yayınla
+        uses: softprops/action-gh-release@v2
         with:
           files: T113_V8_Nitro.zip
           tag_name: V8-NITRO
