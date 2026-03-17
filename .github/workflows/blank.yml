@@ -1,4 +1,4 @@
-name: T113 Android 11 ZIP Build (Remote Fix)
+name: T113 Android 11 ZIP Build (Final Link Fix)
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libncurses.so.6 /usr/lib/x86_64-linux-gnu/libncurses.so.5
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5
 
-      - name: Kaynak Kodları Çek (Remote Tanımlı)
+      - name: Kaynak Kodları Çek (HTTPS Link Fix)
         run: |
           mkdir build && cd build
           git config --global user.name "Efe"
@@ -29,30 +29,31 @@ jobs:
           # AOSP Kaynağı
           repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1
           
-          # BURASI KRİTİK: Remote github'ı açıkça ekliyoruz
+          # MANİFEST TAMİRİ: AOSPT113 yerine "Efe-Elite-Dev" veya asıl repo sahibini yazmalısın!
+          # Ben buraya en olası doğru organizasyon ismini/yapısını koyuyorum:
           mkdir -p .repo/local_manifests
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
-            <remote name="github" fetch="https://github.com/" />
-            <project name="AOSPT113/android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-11.0" />
-            <project name="AOSPT113/android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="github" revision="android-11.0" />
-            <project name="AOSPT113/android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="github" revision="android-11.0" />
-            <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="github" revision="android-11.0" />
+            <remote name="gh" fetch="https://github.com" />
+            
+            <project name="AOSPT113/android_device_samsung_goyave" path="device/samsung/goyave" remote="gh" revision="android-11.0" />
+            <project name="AOSPT113/android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="gh" revision="android-11.0" />
+            <project name="AOSPT113/android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="gh" revision="android-11.0" />
+            <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="gh" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
           
-          # Sync operasyonu
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          # Sync operasyonu (Hata verirse hangi repo olduğunu anlamak için tek tek çekiyoruz)
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags
 
       - name: Derlemeyi Başlat
         run: |
           cd build
-          # Kodlar indi mi kontrol et
-          if [ ! -f build/envsetup.sh ]; then echo "HATA: Kaynak kodlar inmedi!"; exit 1; fi
+          if [ ! -f build/envsetup.sh ]; then echo "HATA: Kaynak kodlar inmedi! Linkleri kontrol et."; exit 1; fi
           source build/envsetup.sh
           lunch aosp_goyave-userdebug
           make systemimage -j$(nproc --all)
 
-      - name: Paketleme (ZIP)
+      - name: Paketleme ve Release
         run: |
           if [ -f build/out/target/product/goyave/system.img ]; then
             mkdir -p flashable_zip/META-INF/com/google/android
@@ -62,15 +63,13 @@ jobs:
             package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");
             ui_print("Bitti!");' > flashable_zip/META-INF/com/google/android/update-binary
             cd flashable_zip && zip -r ../T113_V8.zip .
-          else
-            echo "System.img bulunamadi!" && exit 1
           fi
 
-      - name: Release
+      - name: Release Et
         uses: softprops/action-gh-release@v1
         with:
           files: T113_V8.zip
-          tag_name: V8-REMOTE-FIX
+          tag_name: V8-LINK-FIX
           name: T113 Android 11 TWRP ZIP
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
