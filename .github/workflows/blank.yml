@@ -1,4 +1,4 @@
-name: T113 Android 11 ZIP Build (ABC Planli)
+name: T113 Android 11 ZIP Build (Remote Fix)
 
 on:
   workflow_dispatch:
@@ -13,70 +13,64 @@ jobs:
       - name: Sunucuyu Hazırla
         uses: actions/checkout@v3
 
-      - name: PLAN A - Paket ve Kütüphane Zırhı
+      - name: Paket ve Kütüphane Kurulumu
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl libstdc++6 git python3 python-is-python3 libssl-dev repo libncurses6 libncursesw6
-          # Kütüphane Kandırma (Symlink) - Android 11 için kritik
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libncurses.so.6 /usr/lib/x86_64-linux-gnu/libncurses.so.5
           sudo ln -sf /usr/lib/x86_64-linux-gnu/libtinfo.so.6 /usr/lib/x86_64-linux-gnu/libtinfo.so.5
 
-      - name: PLAN B - Agresif Repo Senkronizasyonu
+      - name: Kaynak Kodları Çek (Remote Tanımlı)
         run: |
           mkdir build && cd build
           git config --global user.name "Efe"
           git config --global user.email "efe@tech.lab"
           
-          # Kaynağı sığ çekiyoruz (Hız + Az Hata)
+          # AOSP Kaynağı
           repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r1 --depth=1
           
+          # BURASI KRİTİK: Remote github'ı açıkça ekliyoruz
           mkdir -p .repo/local_manifests
           echo '<?xml version="1.0" encoding="UTF-8"?>
           <manifest>
+            <remote name="github" fetch="https://github.com/" />
             <project name="AOSPT113/android_device_samsung_goyave" path="device/samsung/goyave" remote="github" revision="android-11.0" />
             <project name="AOSPT113/android_kernel_samsung_goyave" path="kernel/samsung/goyave" remote="github" revision="android-11.0" />
             <project name="AOSPT113/android_vendor_samsung_goyave" path="vendor/samsung/goyave" remote="github" revision="android-11.0" />
             <project name="AOSPT113/android_device_samsung_sc8830-common" path="device/samsung/sc8830-common" remote="github" revision="android-11.0" />
           </manifest>' > .repo/local_manifests/goyave.xml
           
-          # Hata alsa bile durma, elindekileri kullan (Plan B'nin kalbi)
-          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags || echo "Bazı repolar eksik ama devam ediyoruz..."
+          # Sync operasyonu
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-      - name: PLAN C - Derleme ve Hata Yakalama
+      - name: Derlemeyi Başlat
         run: |
           cd build
+          # Kodlar indi mi kontrol et
+          if [ ! -f build/envsetup.sh ]; then echo "HATA: Kaynak kodlar inmedi!"; exit 1; fi
           source build/envsetup.sh
-          # Hedefi seç, seçemezsen hata bas ama durma
-          lunch aosp_goyave-userdebug || { echo "LUNCH HATASI: Cihaz agaci yanlis yerde olabilir!"; exit 1; }
-          
-          # Derleme (Burada hata verirse logu yukari firlatacak)
-          make systemimage -j$(nproc --all) || { echo "DERLEME HATASI: Kodda eksik var!"; exit 1; }
+          lunch aosp_goyave-userdebug
+          make systemimage -j$(nproc --all)
 
-      - name: Paketleme ve Mühürleme (Success Check)
+      - name: Paketleme (ZIP)
         run: |
           if [ -f build/out/target/product/goyave/system.img ]; then
             mkdir -p flashable_zip/META-INF/com/google/android
             cp build/out/target/product/goyave/system.img flashable_zip/
-            
             echo '#!/sbin/sh
-            ui_print("---------------------------------");
-            ui_print("   T113 V8 Android 11 Yukleniyor ");
-            ui_print("   Efe Tech Lab Special Edition  ");
-            ui_print("---------------------------------");
+            ui_print("T113 V8 Yukleniyor...");
             package_extract_file("system.img", "/dev/block/platform/sdhci-pxa.0/by-name/system");
-            ui_print("Mermi bitti aga, reboot et!");' > flashable_zip/META-INF/com/google/android/update-binary
-            
-            cd flashable_zip && zip -r ../T113_V8_Mermi.zip .
+            ui_print("Bitti!");' > flashable_zip/META-INF/com/google/android/update-binary
+            cd flashable_zip && zip -r ../T113_V8.zip .
           else
-            echo "Kritik Hata: system.img olusmadi. Plan C devre disi!"
-            exit 1
+            echo "System.img bulunamadi!" && exit 1
           fi
 
-      - name: Final - ZIP Dosyasini Release Yap
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: T113_V8_Mermi.zip
-          tag_name: V8-NİHAİ
-          name: T113 Android 11 TWRP ZIP (Mermi)
+          files: T113_V8.zip
+          tag_name: V8-REMOTE-FIX
+          name: T113 Android 11 TWRP ZIP
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
