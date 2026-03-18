@@ -12,13 +12,13 @@ jobs:
       - name: 📂 Repoyu Hazirla
         uses: actions/checkout@v4
 
-      - name: 🛠️ Efe Lab Araclarını Kur
+      - name: 🛠️ Efe Lab Araclari Kur
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl abootimg python3-pip android-sdk-libsparse-utils
           pip install gdown
 
-      - name: 🏎️ Drive'dan Dosyaları Çek
+      - name: 🏎️ Drive'dan Dosyalari Cek
         run: |
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
@@ -36,18 +36,17 @@ jobs:
           cp system.img flashable/images/system.img
           cp boot.img flashable/images/boot.img
           
-          echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
+          # UPDATE-BINARY
+          printf '#!/sbin/sh\n' > flashable/META-INF/com/google/android/update-binary
           
-          # HATA BURADAYDI: Tırnak işaretleri ve EOF yapısı düzeltildi
-          cat << 'EOF' > flashable/META-INF/com/google/android/updater-script
-          ui_print("--------------------------------------");
-          ui_print("   T113 V8 NITRO - LITE EDITION       ");
-          ui_print("        EFE TECH LAB                  ");
-          ui_print("--------------------------------------");
-          package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");
-          package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");
-          ui_print("ISLEM TAMAM! EFE LAB SUNAR.");
-          EOF
+          # UPDATER-SCRIPT (Hatasız Yazım Yöntemi)
+          printf 'ui_print("--------------------------------------");\n' > flashable/META-INF/com/google/android/updater-script
+          printf 'ui_print("   T113 V8 NITRO - LITE EDITION       ");\n' >> flashable/META-INF/com/google/android/updater-script
+          printf 'ui_print("        EFE TECH LAB                  ");\n' >> flashable/META-INF/com/google/android/updater-script
+          printf 'ui_print("--------------------------------------");\n' >> flashable/META-INF/com/google/android/updater-script
+          printf 'package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");\n' >> flashable/META-INF/com/google/android/updater-script
+          printf 'package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");\n' >> flashable/META-INF/com/google/android/updater-script
+          printf 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");\n' >> flashable/META-INF/com/google/android/updater-script
 
       - name: 🎁 ZIP Olustur
         run: |
@@ -56,9 +55,9 @@ jobs:
       - name: 🚀 Efe Lab: Release Olustur
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v8.2-lite-final"
-          name: "T113 V8 Nitro Lite Edition Final"
-          body: "Line 27 hatası giderildi. Efe Lab Lite Edition hazır!"
+          tag_name: "v8.2-lite-final-fix"
+          name: "T113 V8 Nitro Lite Edition Final Fix"
+          body: "Line 26 hatasi giderildi. Efe Lab Lite Edition hazir!"
           files: T113_V8_Lite_Edition.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
