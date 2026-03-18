@@ -43,7 +43,7 @@ jobs:
             # Hicbir sey yapma, oldugu gibi kalsın
           fi
 
-      - name: 6. Efe Lab: Block-Based OTA Donusumu
+      - name:  Block-Based OTA Donusumu
         run: |
           # Artik Magic Number hatasi vermemeli
           python3 img2sdat/img2sdat.py system.img -o output -v 4
