@@ -1,4 +1,4 @@
-name: T113 V12 Python Fix Build
+name: T113 V13 Nitro Final Fix
 
 on:
   workflow_dispatch:
@@ -12,7 +12,6 @@ jobs:
       - name: Repoyu Hazirla
         uses: actions/checkout@v4
 
-      # HATA BURADA COZULUYOR: Python 3.10'a geri donuyoruz
       - name: Python 3.10 Kur (Compatibility Mode)
         uses: actions/setup-python@v5
         with:
@@ -32,16 +31,14 @@ jobs:
 
       - name: Imaj Dogrulama ve Raw Donusumu
         run: |
-          # Sparse imaji Raw'a ceviriyoruz (img2sdat sadece Raw yer)
+          # Sparse imaji Raw'a ceviriyoruz
           simg2img system.img system.raw.img 2>/dev/null || mv system.img system.raw.img
           [ -f system.raw.img ] && mv system.raw.img system.img
           echo "Imaj hazir."
 
       - name: Efe Lab: Block-Based OTA Donusumu
         run: |
-          # Artik Python 3.10 ile calisiyor, imp hatasi vermez
           python3 img2sdat/img2sdat.py system.img -o output -v 4
-          
           echo "Brotli sikistirma basliyor (Level 9)..."
           brotli -9 output/system.new.dat -o output/system.new.dat.br
           rm output/system.new.dat
@@ -62,16 +59,20 @@ jobs:
           printf '#!/sbin/sh\necho "Functions"\n' > out/install/bin/backuptool.functions
           chmod +x out/install/bin/*.sh
 
-      - name: Updater Script Yazimi
+      - name: Updater Script Yazimi (Line 40 Fix)
         run: |
-          FILE="out/META-INF/com/google/android/updater-script"
-          echo 'ui_print("--------------------------------------");' > $FILE
-          echo 'ui_print("   T113 V12 NITRO - PYTHON FIX        ");' >> $FILE
-          echo 'ui_print("        EFE TECH LAB PRO              ");' >> $FILE
-          echo 'ui_print("--------------------------------------");' >> $FILE
-          echo 'block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");' >> $FILE
-          echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> $FILE
-          echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> $FILE
+          # Hatalı olan >> >> kısmı cat ile tek seferde güvenli hale getirildi
+          cat << 'EOF' > out/META-INF/com/google/android/updater-script
+          ui_print("--------------------------------------");
+          ui_print("   T113 V13 NITRO - FINAL EDITION     ");
+          ui_print("        EFE TECH LAB PRO              ");
+          ui_print("--------------------------------------");
+          ui_print("Sistem bloklari yaziliyor...");
+          block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");
+          ui_print("Boot yaziliyor...");
+          package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");
+          ui_print("KURULUM TAMAMLANDI! EFE LAB SUNAR.");
+          EOF
 
       - name: Update-Binary Hazirla
         run: |
@@ -80,14 +81,14 @@ jobs:
 
       - name: ZIP Paketleme
         run: |
-          cd out && zip -9 -r ../T113_V12_Python_Fix.zip .
+          cd out && zip -9 -r ../T113_V13_Final_Success.zip .
 
       - name: Efe Lab Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v12.0-fix"
-          name: "T113 V12 Nitro (Python 3.10 Fix)"
-          body: "ModuleNotFoundError: No module named 'imp' hatasi Python 3.10'a gecilerek giderildi."
-          files: T113_V12_Python_Fix.zip
+          tag_name: "v13.0-final"
+          name: "T113 V13 Nitro (Syntax Fix)"
+          body: "Line 40 syntax hatasi giderildi. Tiyaptip benzer official block yapisi hazir."
+          files: T113_V13_Final_Success.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
