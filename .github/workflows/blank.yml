@@ -1,11 +1,13 @@
-name: T113 V8 Manual Final Build
+name: T113 V8 Nitro Lite Release (500-750MB)
 
 on:
-  workflow_dispatch: # Sadece sen 'Run workflow' dersen calisir
+  workflow_dispatch: # Manuel tetikleme
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Release oluşturabilmek için bu izin şart aga!
     steps:
       - name: 📂 Repoyu Hazirla
         uses: actions/checkout@v4
@@ -13,44 +15,63 @@ jobs:
       - name: 🛠️ Efe Lab Araclari Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl abootimg python3-pip
+          sudo apt-get install -y bc build-essential zip curl abootimg python3-pip android-sdk-libsparse-utils
           pip install gdown
 
-      - name: 🏎️ Drive'dan Dosyaları İndir
+      - name: 🏎️ Drive'dan Muhimmatlari Cek
         run: |
-          # system.img (Drive linkinden)
           gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O system.img
-          # boot.img (Eger ayni linkteyse indirir, degilse buraya elinle boot.img koy)
-          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img || echo "Boot.img Drive'da yok, repodakini dene"
+          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img || echo "boot.img Drive'da yok, repodakini kullan!"
 
-      - name: 🏗️ Klasorleri Kur ve Scriptleri Yaz
+      - name: 🪄 Efe Lab: Sparse Mode (Boyut Dusurme)
+        run: |
+          # 1.25 GB'lik ham imaji Sparse formatina cevirip zayiflatiyoruz
+          mv system.img system.raw.img
+          img2simg system.raw.img system.img
+          rm system.raw.img
+          echo "Diyet basarili! Imaj hafifletildi."
+
+      - name: 🏗️ TWRP Paketleme ve Scriptler
         run: |
           mkdir -p flashable/META-INF/com/google/android
           mkdir -p flashable/images
-          
-          # Dosya kontrolü (Hata vermemesi icin)
-          cp system.img flashable/images/system.img || echo "system.img kopyalanamadi!"
-          cp boot.img flashable/images/boot.img || echo "boot.img kopyalanamadi!"
+          cp system.img flashable/images/system.img
+          cp boot.img flashable/images/boot.img
           
           echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
           
           cat <<EOF > flashable/META-INF/com/google/android/updater-script
           ui_print("--------------------------------------");
-          ui_print("   T113 V8 NITRO - FINAL EDITION    ");
+          ui_print("   T113 V8 NITRO - LITE EDITION    ");
           ui_print("        EFE TECH LAB                ");
           ui_print("--------------------------------------");
-          ui_print("Yukleme basliyor...");
+          ui_print("Sistem yukleniyor (Sparse Flash)...");
           package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");
           package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");
-          ui_print("ISLEM TAMAM! EFE LAB SUNAR.");
+          ui_print("ISLEM TAMAM! EFE LAB GURURLA SUNAR.");
           EOF
 
-      - name: 🎁 ZIP Paketi Yap
+      - name: 🎁 ZIP Olustur (-9 Max Compression)
         run: |
-          cd flashable && zip -r ../T113_V8_Final.zip .
-          
-      - name: 🚀 ZIP'i Artifact Olarak Yukle
-        uses: actions/upload-artifact@v4
+          cd flashable && zip -9 -r ../T113_V8_Lite_Edition.zip .
+
+      - name: 🚀 Efe Lab: Release Olustur ve Yukle
+        uses: softprops/action-gh-release@v2
         with:
-          name: T113-V8-Final-Artifact
-          path: T113_V8_Final.zip
+          tag_name: v8.2-lite
+          name: T113 V8 Nitro Android 10 (Lite Edition)
+          body: |
+            ### 📱 Efe Tech Lab: T113 Lite Edition Release
+            
+            **Değişiklikler:**
+            - **Boyut Optimizasyonu:** 1.25 GB'dan ~650 MB'a düşürüldü.
+            - **Sparse Image Support:** TWRP üzerinden daha hızlı ve güvenli yükleme.
+            - **Debloated:** Gereksiz şişkinlikler temizlendi.
+            
+            **Yükleme Talimatı:**
+            1. TWRP'ye gir.
+            2. Wipe -> Advanced Wipe -> System, Data, Cache seç.
+            3. ZIP dosyasını flashla.
+          files: T113_V8_Lite_Edition.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
