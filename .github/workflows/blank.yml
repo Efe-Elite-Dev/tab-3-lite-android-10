@@ -1,20 +1,74 @@
-name: T113 C-Drive Test Build
+name: T113 V8 Nitro Android 10 Final Build
 
 on:
   workflow_dispatch:
 
 jobs:
-  check_files:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Yerel Dosyaya Erişmeyi Dene
+      - name: 📂 Repoyu Hazırla
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Efe Lab Gerekli Araçları Kur
         run: |
-          echo "Senin C diskindeki dosyaya ulasmaya calisiyorum..."
-          # Linux sunucusu senin Windows bilgisayarindaki bu yolu arayacak:
-          ls "file:///C:/Users/User/Downloads/SAMFW.COM_SM-T113_TUR_T113XXS0AQC2_fac/system.img" || echo "HATA: Sunucu senin bilgisayarina baglanamiyor!"
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential zip curl abootimg python3-pip
+          pip install gdown
+
+      - name: 🏎️ Drive'dan system.img Çek (Efe Lab Hızı)
+        run: |
+          # Senin verdiğin Drive ID'si sabitlendi
+          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O system.img
+          echo "System imajı Efe Lab sunucularına indi!"
+
+      - name: 🏗️ Boot.img ve Kernel Analizi
+        run: |
+          # Repondaki boot.img'ı parçalıyoruz
+          if [ -f "boot.img" ]; then
+            abootimg -x boot.img
+            echo "Kernel ve Ramdisk söküldü!"
+          else
+            echo "HATA: boot.img bulunamadı!"
+            exit 1
+          fi
+
+      - name: 🧬 META-INF ve TWRP Scriptlerini Oluştur
+        run: |
+          # Klasör hiyerarşisini kur
+          mkdir -p flashable/META-INF/com/google/android
+          mkdir -p flashable/images
           
-      - name: Neden Olmadigini Acikla
+          # Dosyaları taşı
+          cp system.img flashable/images/system.img
+          cp boot.img flashable/images/boot.img
+          
+          # UPDATE-BINARY (Efe Lab Standard)
+          echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
+          
+          # UPDATER-SCRIPT (Senin PIT yollarına göre)
+          cat <<EOF > flashable/META-INF/com/google/android/updater-script
+          ui_print("--------------------------------------");
+          ui_print("   T113 V8 NITRO - ANDROID 10       ");
+          ui_print("        EFE TECH LAB                ");
+          ui_print("--------------------------------------");
+          ui_print("Sistem yukleniyor... (Efe Lab Gururla Sunar)");
+          package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");
+          ui_print("Kernel (Boot) yaziliyor...");
+          package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");
+          ui_print("--------------------------------------");
+          ui_print("   ISLEM TAMAM! REBOOT ET AGA       ");
+          ui_print("--------------------------------------");
+          EOF
+
+      - name: 🎁 ZIP Paketini Hazırla
         run: |
-          echo "GitHub sunuculari su an Amerika/Avrupa veri merkezlerinde calisiyor."
-          echo "Senin bilgisayarin ise Turkiye'de ve yerel agda."
-          echo "Bir web linki (http) olmadigi surece sunucu senin dosyalarini goremez."
+          cd flashable
+          zip -r ../T113_V8_Android10_Flashable.zip .
+          echo "Paketleme bitti!"
+
+      - name: 🚀 Final ZIP'i Artifact Olarak Yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: T113-V8-EfeLab-Package
+          path: T113_V8_Android10_Flashable.zip
