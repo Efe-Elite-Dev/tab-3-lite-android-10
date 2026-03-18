@@ -1,64 +1,56 @@
-name: T113 V8 Nitro Auto-Build (Efe Lab)
+name: T113 V8 Manual Final Build
 
 on:
-  push:
-    branches:
-      - first-tab-3-lite-android-10  # Sadece bu dalda bir degisiklik olunca calisir
-  workflow_dispatch: # İstersen yine de manuel baslatabilirsin
+  workflow_dispatch: # Sadece sen 'Run workflow' dersen calisir
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📂 Repoyu Cek
+      - name: 📂 Repoyu Hazirla
         uses: actions/checkout@v4
-        with:
-          ref: first-tab-3-lite-android-10 # Belirledigin ozel dalı baz alir
 
-      - name: 🛠️ Efe Lab Aracları Kur
+      - name: 🛠️ Efe Lab Araclari Kur
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl abootimg python3-pip
           pip install gdown
 
-      - name: 🏎️ Drive'dan Muhimmatlari Cek (Efe Lab Hızı)
+      - name: 🏎️ Drive'dan Dosyaları İndir
         run: |
-          # system.img çekiliyor
+          # system.img (Drive linkinden)
           gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O system.img
-          # boot.img çekiliyor (Eger ID farklıysa burayı güncellemelisin)
-          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img 
+          # boot.img (Eger ayni linkteyse indirir, degilse buraya elinle boot.img koy)
+          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img || echo "Boot.img Drive'da yok, repodakini dene"
 
-      - name: 🏗️ TWRP Paketleme Operasyonu
+      - name: 🏗️ Klasorleri Kur ve Scriptleri Yaz
         run: |
           mkdir -p flashable/META-INF/com/google/android
           mkdir -p flashable/images
-          cp system.img flashable/images/system.img
-          cp boot.img flashable/images/boot.img
           
-          # UPDATE-BINARY
+          # Dosya kontrolü (Hata vermemesi icin)
+          cp system.img flashable/images/system.img || echo "system.img kopyalanamadi!"
+          cp boot.img flashable/images/boot.img || echo "boot.img kopyalanamadi!"
+          
           echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
           
-          # UPDATER-SCRIPT (Efe Lab Ozel)
           cat <<EOF > flashable/META-INF/com/google/android/updater-script
           ui_print("--------------------------------------");
-          ui_print("   T113 V8 NITRO - AUTOMATIC BUILD  ");
+          ui_print("   T113 V8 NITRO - FINAL EDITION    ");
           ui_print("        EFE TECH LAB                ");
-          ui_print("   BRANCH: FIRST-TAB-3-LITE         ");
           ui_print("--------------------------------------");
-          ui_print("Efe Lab: Yukleme basladi...");
+          ui_print("Yukleme basliyor...");
           package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");
           package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");
-          ui_print("--------------------------------------");
-          ui_print("   ISLEM BASARILI! REBOOT ET AGA    ");
-          ui_print("--------------------------------------");
+          ui_print("ISLEM TAMAM! EFE LAB SUNAR.");
           EOF
 
-      - name: 🎁 ZIP Olustur
+      - name: 🎁 ZIP Paketi Yap
         run: |
-          cd flashable && zip -r ../T113_V8_First_Edition.zip .
+          cd flashable && zip -r ../T113_V8_Final.zip .
           
       - name: 🚀 ZIP'i Artifact Olarak Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: T113-V8-First-Package
-          path: T113_V8_First_Edition.zip
+          name: T113-V8-Final-Artifact
+          path: T113_V8_Final.zip
