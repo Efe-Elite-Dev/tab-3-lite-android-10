@@ -1,4 +1,4 @@
-name: T113 V8 Nitro Lite Release
+name: T113 V8 Nitro Lite Fix
 
 on:
   workflow_dispatch:
@@ -7,39 +7,40 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Release yapabilmek için şart
+      contents: write
     steps:
       - name: 📂 Repoyu Hazirla
         uses: actions/checkout@v4
 
-      - name: 🛠️ Efe Lab Araclari Kur
+      - name: 🛠️ Efe Lab Araclarını Kur
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl abootimg python3-pip android-sdk-libsparse-utils
           pip install gdown
 
-      - name: 🏎️ Drive'dan Muhimmatlari Cek
+      - name: 🏎️ Drive'dan Dosyaları Çek
         run: |
-          # system.img çekiliyor
-          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O system.img
-          # boot.img kontrolü
-          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img || echo "Boot Drive'da yok"
+          # Dosyayı indirirken ismini tırnak içinde garantiye alıyoruz
+          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O "system.img"
+          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O "boot.img" || echo "Boot cekilemedi"
 
       - name: 🪄 Efe Lab: Sparse Mode
         run: |
-          mv system.img system.raw.img
-          img2simg system.raw.img system.img
-          rm system.raw.img
+          # Eğer dosya ismi hatalıysa bile yıldız işaretiyle yakalıyoruz
+          mv "system.img" "system.raw.img" 2>/dev/null || mv *.img system.raw.img
+          img2simg "system.raw.img" "system.img"
+          rm -f "system.raw.img"
 
       - name: 🏗️ TWRP Paketleme
         run: |
           mkdir -p flashable/META-INF/com/google/android
           mkdir -p flashable/images
-          cp system.img flashable/images/system.img
-          cp boot.img flashable/images/boot.img
-          echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
+          cp "system.img" "flashable/images/system.img"
+          cp "boot.img" "flashable/images/boot.img"
           
-          cat <<EOF > flashable/META-INF/com/google/android/updater-script
+          echo '#!/sbin/sh' > "flashable/META-INF/com/google/android/update-binary"
+          
+          cat <<EOF > "flashable/META-INF/com/google/android/updater-script
           ui_print("--------------------------------------");
           ui_print("   T113 V8 NITRO - LITE EDITION       ");
           ui_print("        EFE TECH LAB                  ");
@@ -51,13 +52,14 @@ jobs:
 
       - name: 🎁 ZIP Olustur
         run: |
-          cd flashable && zip -9 -r ../T113_V8_Lite_Edition.zip .
+          cd flashable && zip -9 -r "../T113_V8_Lite_Edition.zip" .
 
       - name: 🚀 Efe Lab: Release Olustur
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v8.2-lite-${{ github.run_number }}" # Her seferinde farklı etiket için run_number ekledik
-          name: "T113 V8 Nitro Lite Edition #${{ github.run_number }}"
-          body: "Efe Lab Lite Edition başarıyla derlendi. Boyut optimize edildi."
-          files: T113_V8_Lite_Edition.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: "v8.2-lite-fix"
+          name: "T113 V8 Nitro Lite Edition Fix"
+          body: "Efe Lab Lite Edition: Yazım hataları ve dosya isimleri düzeltildi."
+          files: "T113_V8_Lite_Edition.zip"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
