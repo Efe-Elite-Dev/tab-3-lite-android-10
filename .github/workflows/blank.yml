@@ -1,4 +1,4 @@
-name: T113 V8 Nitro Lite Ultimate
+name: T113 V8 Nitro Lite Final
 
 on:
   push:
@@ -11,39 +11,38 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: 📂 Repoyu Hazirla
+      - name: Repoyu Hazirla
         uses: actions/checkout@v4
 
-      - name: 🛠️ Efe Lab Araclari Kur
+      - name: Efe Lab Araclarini Kur
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl abootimg python3-pip android-sdk-libsparse-utils
           pip install gdown
 
-      - name: 🏎️ Drive'dan Dosyalari Cek
+      - name: Drive Dosyalarini Cek
         run: |
-          # system.img indiriliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
-          # boot.img indiriliyor
-          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
+          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot indirilemedi"
 
-      - name: 🪄 Efe Lab: Sparse Mode (Boyut Dusurme)
+      - name: Efe Lab Sparse Mode
         run: |
           mv system.img system.raw.img
           img2simg system.raw.img system.img
           rm -f system.raw.img
-          echo "Diyet tamamlandi, dosya kuculdu!"
+          echo "Boyut dusuruldu"
 
-      - name: 🏗️ TWRP Paketleme
+      - name: TWRP Paket Hazirla
         run: |
           mkdir -p flashable/META-INF/com/google/android
           mkdir -p flashable/images
           cp system.img flashable/images/system.img
           cp boot.img flashable/images/boot.img
           
-          # Scriptleri tertemiz olustur
+          # Binary dosyasi
           printf '#!/sbin/sh\n' > flashable/META-INF/com/google/android/update-binary
           
+          # Updater Script
           echo 'ui_print("--------------------------------------");' > flashable/META-INF/com/google/android/updater-script
           echo 'ui_print("   T113 V8 NITRO - LITE EDITION       ");' >> flashable/META-INF/com/google/android/updater-script
           echo 'ui_print("        EFE TECH LAB                  ");' >> flashable/META-INF/com/google/android/updater-script
@@ -52,16 +51,16 @@ jobs:
           echo 'package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> flashable/META-INF/com/google/android/updater-script
           echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> flashable/META-INF/com/google/android/updater-script
 
-      - name: 🎁 ZIP Paketi Yap
+      - name: ZIP Olustur
         run: |
-          cd flashable && zip -9 -r ../T113_V8_Lite_Final.zip .
+          cd flashable && zip -9 -r ../T113_V8_Lite_Success.zip .
 
-      - name: 🚀 Efe Lab: Release Olustur
+      - name: Efe Lab Release Olustur
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v8.2-lite-success"
-          name: "T113 V8 Nitro Lite Edition (Gerçek Versiyon)"
-          body: "10 saniyelik sahte basarilara inat, Efe Lab gerçek Lite ROM'u sunar!"
-          files: T113_V8_Lite_Final.zip
+          tag_name: "v8.2-no-emoji"
+          name: "T113 V8 Nitro Lite (No Emoji)"
+          body: "Emojisiz, saf ve stabil Efe Lab derlemesi. Boyut optimize edildi."
+          files: T113_V8_Lite_Success.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
