@@ -35,7 +35,7 @@ jobs:
           [ -f system.raw.img ] && mv system.raw.img system.img
           echo "Imaj hazir."
 
-      - name: 6. Efe Lab: Block-Based OTA Donusumu
+      - name: 
         run: |
           # BURADA BOSLUKLARA DIKKAT!
           python3 img2sdat/img2sdat.py system.img -o output -v 4
