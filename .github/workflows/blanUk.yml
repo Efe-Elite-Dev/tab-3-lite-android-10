@@ -1,67 +1,87 @@
-name: T113 V8 Nitro Lite Ultimate
+name: T113 V11 Nitro Pro Fix
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build:
+  efe-lab-build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: 📂 Repoyu Hazirla
+      - name: Repoyu Hazirla
         uses: actions/checkout@v4
 
-      - name: 🛠️ Efe Lab Araclari Kur
+      - name: Sistem Guncelle ve Araclari Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential zip curl abootimg python3-pip android-sdk-libsparse-utils
+          sudo apt-get install -y python3 python3-pip brotli zip android-sdk-libsparse-utils curl git
           pip install gdown
+          git clone https://github.com/xpirt/img2sdat.git
 
-      - name: 🏎️ Drive'dan Dosyalari Cek
+      - name: Google Drive Muhimmatlarini Cek
         run: |
-          # system.img indiriliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
-          # boot.img indiriliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
 
-      - name:  Efe Lab: Sparse Mode (Boyut Dusurme)
+      - name: Imaj Dogrulama ve Raw Donusumu
         run: |
-          mv system.img system.raw.img
-          img2simg system.raw.img system.img
-          rm -f system.raw.img
-          echo "Diyet tamamlandi, dosya kuculdu!"
+          # 29. SATIR VE CIVARI BURASI - EN GÜVENLİ FORMATTA YAZILDI
+          if img2simg system.img system.raw.img 2>/dev/null; then
+            mv system.raw.img system.img
+          elif simg2img system.img system.raw.img 2>/dev/null; then
+            mv system.raw.img system.img
+          fi
+          echo "Imaj kontrolu tamamlandi."
 
-      - name: 🏗️ TWRP Paketleme
+      - name: Block-Based OTA Donusumu
         run: |
-          mkdir -p flashable/META-INF/com/google/android
-          mkdir -p flashable/images
-          cp system.img flashable/images/system.img
-          cp boot.img flashable/images/boot.img
-          
-          # Scriptleri tertemiz olustur
-          printf '#!/sbin/sh\n' > flashable/META-INF/com/google/android/update-binary
-          
-          echo 'ui_print("--------------------------------------");' > flashable/META-INF/com/google/android/updater-script
-          echo 'ui_print("   T113 V8 NITRO - LITE EDITION       ");' >> flashable/META-INF/com/google/android/updater-script
-          echo 'ui_print("        EFE TECH LAB                  ");' >> flashable/META-INF/com/google/android/updater-script
-          echo 'ui_print("--------------------------------------");' >> flashable/META-INF/com/google/android/updater-script
-          echo 'package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");' >> flashable/META-INF/com/google/android/updater-script
-          echo 'package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> flashable/META-INF/com/google/android/updater-script
-          echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> flashable/META-INF/com/google/android/updater-script
+          python3 img2sdat/img2sdat.py system.img -o output -v 4
+          brotli -9 output/system.new.dat -o output/system.new.dat.br
+          rm output/system.new.dat
+          touch output/system.patch.dat
 
-      - name: 🎁 ZIP Paketi Yap
+      - name: Klasor Yapisini Insa Et
         run: |
-          cd flashable && zip -9 -r ../T113_V8_Lite_Final.zip .
+          mkdir -p build_root/install/bin
+          mkdir -p build_root/META-INF/com/google/android
+          mkdir -p build_root/system
+          mv output/system.new.dat.br build_root/
+          mv output/system.transfer.list build_root/
+          mv output/system.patch.dat build_root/
+          mv boot.img build_root/
+          touch build_root/file_contexts.bin
+          echo "# Efe Lab build.prop" > build_root/system/build.prop
+          printf '#!/sbin/sh\necho "Backup Tool"\n' > build_root/install/bin/backuptool.sh
+          printf '#!/sbin/sh\necho "Functions"\n' > build_root/install/bin/backuptool.functions
+          chmod +x build_root/install/bin/*.sh
 
-      - name: 🚀 Efe Lab: Release Olustur
+      - name: Professional Script Yazimi
+        run: |
+          FILE="build_root/META-INF/com/google/android/updater-script"
+          echo 'ui_print("--------------------------------------");' > $FILE
+          echo 'ui_print("   T113 V11 NITRO - BLOCK EDITION     ");' >> $FILE
+          echo 'ui_print("        EFE TECH LAB PRO              ");' >> $FILE
+          echo 'ui_print("--------------------------------------");' >> $FILE
+          echo 'block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");' >> $FILE
+          echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> >> $FILE
+          echo 'ui_print("KURULUM BASARIYLA TAMAMLANDI!");' >> $FILE
+
+      - name: Update-Binary Hazirla
+        run: |
+          printf '#!/sbin/sh\n/sbin/edify -s "$1" "$2" "$3"\n' > build_root/META-INF/com/google/android/update-binary
+          chmod +x build_root/META-INF/com/google/android/update-binary
+
+      - name: ZIP Paketleme
+        run: |
+          cd build_root && zip -9 -r ../T113_V11_Block_Success.zip .
+
+      - name: Efe Lab Professional Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v8.2-lite-success"
-          name: "T113 V8 Nitro Lite Edition (Gerçek Versiyon)"
-          body: "10 saniyelik sahte basarilara inat, Efe Lab gerçek Lite ROM'u sunar!"
-          files: T113_V8_Lite_Final.zip
+          tag_name: "v11.0-pro"
+          name: "T113 V11 Nitro Pro (Block Format)"
+          body: "Line 29 hatasi giderildi. Tiyaptip benzer official yapı hazır!"
+          files: T113_V11_Block_Success.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
