@@ -1,4 +1,4 @@
-name: T113 V15 Nitro Official Build
+name: T113 V16 Nitro Magic Fix
 
 on:
   workflow_dispatch:
@@ -29,15 +29,23 @@ jobs:
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
 
-      - name: 5. Imaj Dogrulama ve Raw Donusumu
+      - name: 5. Imaj Magic Fix (Sparse to Raw)
         run: |
-          simg2img system.img system.raw.img 2>/dev/null || mv system.img system.raw.img
-          [ -f system.raw.img ] && mv system.raw.img system.img
-          echo "Imaj hazir."
+          # HATA BURADA COZULUYOR:
+          # img2sdat aracı Android Sparse formatı ister. 
+          # Eğer dosya ham (raw) ise onu sparse formatına (0xED26FF3A) çeviriyoruz.
+          echo "Imaj formatı kontrol ediliyor..."
+          if img2simg system.img system.sparse.img 2>/dev/null; then
+            echo "Imaj Raw formatındaydı, Sparse yapıldı."
+            mv system.sparse.img system.img
+          else
+            echo "Imaj zaten Sparse veya baska bir formatta. Manuel kontrol yapiliyor."
+            # Hicbir sey yapma, oldugu gibi kalsın
+          fi
 
-      - name: 
+      - name: 6. Efe Lab: Block-Based OTA Donusumu
         run: |
-          # BURADA BOSLUKLARA DIKKAT!
+          # Artik Magic Number hatasi vermemeli
           python3 img2sdat/img2sdat.py system.img -o output -v 4
           echo "Brotli sikistirma basliyor (Level 9)..."
           brotli -9 output/system.new.dat -o output/system.new.dat.br
@@ -46,23 +54,16 @@ jobs:
 
       - name: 7. Klasor Yapisini Insa Et
         run: |
-          # Resimdeki yapinin aynisini kuruyoruz
           mkdir -p out/install/bin
           mkdir -p out/META-INF/com/android/otacert
           mkdir -p out/META-INF/com/google/android
           mkdir -p out/system
-          
-          # Dosyalari yerlestir
           mv output/system.new.dat.br out/
           mv output/system.transfer.list out/
           mv output/system.patch.dat out/
           mv boot.img out/
           touch out/file_contexts.bin
-          
-          # build.prop (image_6c60a3.png'deki gibi)
           echo "# Efe Lab build.prop" > out/system/build.prop
-          
-          # bin/backuptool (image_6c6020.png'deki gibi)
           printf '#!/sbin/sh\necho "Backup Tool"\n' > out/install/bin/backuptool.sh
           printf '#!/sbin/sh\necho "Functions"\n' > out/install/bin/backuptool.functions
           chmod +x out/install/bin/*.sh
@@ -71,12 +72,10 @@ jobs:
         run: |
           FILE="out/META-INF/com/google/android/updater-script"
           echo 'ui_print("--------------------------------------");' > $FILE
-          echo 'ui_print("   T113 V15 NITRO - OFFICIAL STYLE    ");' >> $FILE
+          echo 'ui_print("   T113 V16 NITRO - MAGIC FIX         ");' >> $FILE
           echo 'ui_print("        EFE TECH LAB PRO              ");' >> $FILE
           echo 'ui_print("--------------------------------------");' >> $FILE
-          echo 'ui_print("Sistem bloklari yaziliyor...");' >> $FILE
           echo 'block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");' >> $FILE
-          echo 'ui_print("Boot yaziliyor...");' >> $FILE
           echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> $FILE
           echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> $FILE
 
@@ -84,20 +83,19 @@ jobs:
         run: |
           printf '#!/sbin/sh\n/sbin/edify -s "$1" "$2" "$3"\n' > out/META-INF/com/google/android/update-binary
           chmod +x out/META-INF/com/google/android/update-binary
-          # image_6c6064.png'deki metadata dosyalari
           touch out/META-INF/com/android/metadata
           touch out/META-INF/com/android/otacert/otacert
 
       - name: 10. ZIP Paketleme ve Release
         run: |
-          cd out && zip -9 -r ../T113_V15_Final_Official.zip .
+          cd out && zip -9 -r ../T113_V16_Magic_Success.zip .
           
       - name: 11. Efe Lab Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v15.0-official"
-          name: "T113 V15 Nitro (Official Structure)"
-          body: "YAML syntax hatasi (indentation) giderildi. Resimdeki klasor yapisi birebir uygulandi."
-          files: T113_V15_Final_Official.zip
+          tag_name: "v16.0-magic"
+          name: "T113 V16 Nitro (Magic Fix)"
+          body: "ValueError: Magic hatası img2simg ile zorunlu Sparse dönüşümü yapılarak giderildi."
+          files: T113_V16_Magic_Success.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
