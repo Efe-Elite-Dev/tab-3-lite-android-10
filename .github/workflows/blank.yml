@@ -1,13 +1,13 @@
-name: T113 V8 Nitro Lite Release (500-750MB)
+name: T113 V8 Nitro Lite Release
 
 on:
-  workflow_dispatch: # Manuel tetikleme
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Release oluşturabilmek için bu izin şart aga!
+      contents: write # Release yapabilmek için şart
     steps:
       - name: 📂 Repoyu Hazirla
         uses: actions/checkout@v4
@@ -20,58 +20,44 @@ jobs:
 
       - name: 🏎️ Drive'dan Muhimmatlari Cek
         run: |
+          # system.img çekiliyor
           gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O system.img
-          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img || echo "boot.img Drive'da yok, repodakini kullan!"
+          # boot.img kontrolü
+          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img || echo "Boot Drive'da yok"
 
-      - name: 🪄 Efe Lab: Sparse Mode (Boyut Dusurme)
+      - name: 🪄 Efe Lab: Sparse Mode
         run: |
-          # 1.25 GB'lik ham imaji Sparse formatina cevirip zayiflatiyoruz
           mv system.img system.raw.img
           img2simg system.raw.img system.img
           rm system.raw.img
-          echo "Diyet basarili! Imaj hafifletildi."
 
-      - name: 🏗️ TWRP Paketleme ve Scriptler
+      - name: 🏗️ TWRP Paketleme
         run: |
           mkdir -p flashable/META-INF/com/google/android
           mkdir -p flashable/images
           cp system.img flashable/images/system.img
           cp boot.img flashable/images/boot.img
-          
           echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
           
           cat <<EOF > flashable/META-INF/com/google/android/updater-script
           ui_print("--------------------------------------");
-          ui_print("   T113 V8 NITRO - LITE EDITION    ");
-          ui_print("        EFE TECH LAB                ");
+          ui_print("   T113 V8 NITRO - LITE EDITION       ");
+          ui_print("        EFE TECH LAB                  ");
           ui_print("--------------------------------------");
-          ui_print("Sistem yukleniyor (Sparse Flash)...");
           package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");
           package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");
-          ui_print("ISLEM TAMAM! EFE LAB GURURLA SUNAR.");
+          ui_print("ISLEM TAMAM! EFE LAB SUNAR.");
           EOF
 
-      - name: 🎁 ZIP Olustur (-9 Max Compression)
+      - name: 🎁 ZIP Olustur
         run: |
           cd flashable && zip -9 -r ../T113_V8_Lite_Edition.zip .
 
-      - name: 🚀 Efe Lab: Release Olustur ve Yukle
+      - name: 🚀 Efe Lab: Release Olustur
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v8.2-lite
-          name: T113 V8 Nitro Android 10 (Lite Edition)
-          body: |
-            ### 📱 Efe Tech Lab: T113 Lite Edition Release
-            
-            **Değişiklikler:**
-            - **Boyut Optimizasyonu:** 1.25 GB'dan ~650 MB'a düşürüldü.
-            - **Sparse Image Support:** TWRP üzerinden daha hızlı ve güvenli yükleme.
-            - **Debloated:** Gereksiz şişkinlikler temizlendi.
-            
-            **Yükleme Talimatı:**
-            1. TWRP'ye gir.
-            2. Wipe -> Advanced Wipe -> System, Data, Cache seç.
-            3. ZIP dosyasını flashla.
+          tag_name: "v8.2-lite-${{ github.run_number }}" # Her seferinde farklı etiket için run_number ekledik
+          name: "T113 V8 Nitro Lite Edition #${{ github.run_number }}"
+          body: "Efe Lab Lite Edition başarıyla derlendi. Boyut optimize edildi."
           files: T113_V8_Lite_Edition.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
