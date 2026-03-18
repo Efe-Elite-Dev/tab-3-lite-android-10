@@ -20,27 +20,26 @@ jobs:
 
       - name: 🏎️ Drive'dan Dosyaları Çek
         run: |
-          # Dosyayı indirirken ismini tırnak içinde garantiye alıyoruz
-          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O "system.img"
-          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O "boot.img" || echo "Boot cekilemedi"
+          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
+          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
 
       - name: 🪄 Efe Lab: Sparse Mode
         run: |
-          # Eğer dosya ismi hatalıysa bile yıldız işaretiyle yakalıyoruz
-          mv "system.img" "system.raw.img" 2>/dev/null || mv *.img system.raw.img
-          img2simg "system.raw.img" "system.img"
-          rm -f "system.raw.img"
+          mv system.img system.raw.img
+          img2simg system.raw.img system.img
+          rm -f system.raw.img
 
       - name: 🏗️ TWRP Paketleme
         run: |
           mkdir -p flashable/META-INF/com/google/android
           mkdir -p flashable/images
-          cp "system.img" "flashable/images/system.img"
-          cp "boot.img" "flashable/images/boot.img"
+          cp system.img flashable/images/system.img
+          cp boot.img flashable/images/boot.img
           
-          echo '#!/sbin/sh' > "flashable/META-INF/com/google/android/update-binary"
+          echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
           
-          cat <<EOF > "flashable/META-INF/com/google/android/updater-script
+          # HATA BURADAYDI: Tırnak işaretleri ve EOF yapısı düzeltildi
+          cat << 'EOF' > flashable/META-INF/com/google/android/updater-script
           ui_print("--------------------------------------");
           ui_print("   T113 V8 NITRO - LITE EDITION       ");
           ui_print("        EFE TECH LAB                  ");
@@ -52,14 +51,14 @@ jobs:
 
       - name: 🎁 ZIP Olustur
         run: |
-          cd flashable && zip -9 -r "../T113_V8_Lite_Edition.zip" .
+          cd flashable && zip -9 -r ../T113_V8_Lite_Edition.zip .
 
       - name: 🚀 Efe Lab: Release Olustur
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v8.2-lite-fix"
-          name: "T113 V8 Nitro Lite Edition Fix"
-          body: "Efe Lab Lite Edition: Yazım hataları ve dosya isimleri düzeltildi."
-          files: "T113_V8_Lite_Edition.zip"
+          tag_name: "v8.2-lite-final"
+          name: "T113 V8 Nitro Lite Edition Final"
+          body: "Line 27 hatası giderildi. Efe Lab Lite Edition hazır!"
+          files: T113_V8_Lite_Edition.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
