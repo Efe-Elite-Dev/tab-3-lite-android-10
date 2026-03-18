@@ -36,7 +36,7 @@ jobs:
           [ -f system.raw.img ] && mv system.raw.img system.img
           echo "Imaj hazir."
 
-      - name: Efe Lab: Block-Based OTA Donusumu
+      - name: Lab: Block-Based OTA Donusumu
         run: |
           python3 img2sdat/img2sdat.py system.img -o output -v 4
           echo "Brotli sikistirma basliyor (Level 9)..."
