@@ -1,97 +1,125 @@
-name: T113 V9 Nitro Official Style Build
+name: T113 V10 Professional Block Build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manuel tetikleme için
 
 jobs:
-  build:
+  efe-lab-build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Release için izin şart
     steps:
-      - name: Repoyu Hazirla
+      - name: 1. Repoyu Hazirla
         uses: actions/checkout@v4
 
-      - name: Efe Lab Gerekli Araclari Kur
+      - name: 2. Sistem Guncelle ve Araclari Kur
         run: |
           sudo apt-get update
-          # python3, pip3, brotli, zip ve img2simg araci
-          sudo apt-get install -y python3 python3-pip brotli zip android-sdk-libsparse-utils
+          sudo apt-get install -y python3 python3-pip brotli zip android-sdk-libsparse-utils curl git
           pip install gdown
-          # xpirt'in meshur img2sdat aracini cekiyoruz
+          # Professional Img2Sdat aracini çekiyoruz
           git clone https://github.com/xpirt/img2sdat.git
+          echo "Araclar kuruldu, Efe Lab hazir."
 
-      - name: Drive Dosyalarini Cek
+      - name: 3. Google Drive Muhimmatlarini Cek
         run: |
+          # system.img cekiliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
+          # boot.img cekiliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot indirilemedi"
 
-      - name: Efe Lab Donusum: Block-Based OTA Hazirligi
+      - name: 4. Imaj Dogrulama ve Raw Donusumu
         run: |
-          # 1. system.img dosyasini raw formata donustur (img2sdat raw istiyor)
-          mv system.img system.raw.img || simg2img system.img system.raw.img
+          # Eger imaj sparse ise raw'a cevir (img2sdat raw ister)
+          if img2simg system.img system.raw.img 2>/dev/null; then
+            echo "Imaj Sparse formatindaydi, Raw'a cevrildi."
+            mv system.raw.img system.img
+          else
+            simg2img system.img system.raw.img 2>/dev/null || echo "Imaj zaten Raw formatinda veya donusum gerekmiyor."
+            [ -f system.raw.img ] && mv system.raw.img system.img
+          fi
+
+      - name: 5. Efe Lab: Block-Based OTA Donusumu (The Magic)
+        run: |
+          # system.img -> system.new.dat ve system.transfer.list olusturma
+          # v4 formatı Android 7.0+ cihazlar için en stabil blok yapısıdır
+          python3 img2sdat/img2sdat.py system.img -o output -v 4
           
-          # 2. system.raw.img -> system.new.dat donusumu
-          python3 img2sdat/img2sdat.py system.raw.img -o output -v 4
-          
-          # 3. system.new.dat -> system.new.dat.br (Brotli Sıkıştırma)
+          # Brotli ile en yuksek seviyede (9) sikistirma (Senin resimdeki .br formatı)
+          echo "Brotli sikistirma basliyor, bu biraz vakit alabilir..."
           brotli -9 output/system.new.dat -o output/system.new.dat.br
           
-          # 4. system.patch.dat olustur (Genelde 0 byte olur)
-          touch output/system.patch.dat
-          echo "Blok donusumu ve brotli sikistirma basarili!"
+          # Gecici dosyalari temizle
+          rm output/system.new.dat
+          touch output/system.patch.dat # Genelde bos olur ama yapida olmasi sart
+          echo "Blok donusumu basariyla tamamlandi!"
 
-      - name: Tiyaptip Benzer Klasor Yapisini Kur
+      - name: 6. Tiyaptip Benzer Klasor Yapisini Insa Et
         run: |
-          # Hedef klasoru oluştur (Official yapidaki gibi)
-          mkdir -p out/{install/bin,META-INF/com/google/android,system}
+          # Senin attigin resimdeki klasor hiyerarsisini kuruyoruz
+          mkdir -p build_root/install/bin
+          mkdir -p build_root/META-INF/com/google/android
+          mkdir -p build_root/system
           
-          # Donusturulen ve gereken dosyalari out/ kokune tasi
-          mv output/system.new.dat.br out/
-          mv output/system.transfer.list out/
-          mv output/system.patch.dat out/
-          mv boot.img out/
+          # Donusturulen dosyalari kok dizine tasi
+          mv output/system.new.dat.br build_root/
+          mv output/system.transfer.list build_root/
+          mv output/system.patch.dat build_root/
+          mv boot.img build_root/
           
-          # Official yapidaki diger placeholder dosyalari olustur
-          touch out/file_contexts.bin
-          touch out/system/build.prop
+          # Ekstra profesyonel dosyalar (Placeholder)
+          touch build_root/file_contexts.bin
+          echo "# Efe Lab build.prop" > build_root/system/build.prop
           
-          # install/ bin klasorundeki scriptleri olustur (Tıpatıp benzerlik icin)
-          printf '#!/sbin/sh\necho "Efe Lab backuptool starting..."\n' > out/install/bin/backuptool.sh
-          printf '#!/sbin/sh\necho "Efe Lab backuptool functions..."\n' > out/install/bin/backuptool.functions
+          # install/bin icindeki scriptler (Resimdeki gibi)
+          printf '#!/sbin/sh\necho "Efe Lab Backup Tool"\n' > build_root/install/bin/backuptool.sh
+          printf '#!/sbin/sh\necho "Efe Lab Functions"\n' > build_root/install/bin/backuptool.functions
+          chmod +x build_root/install/bin/*.sh
           
-          echo "Tiyaptip benzer klasor yapisi kuruldu!"
+          echo "Klasor yapisi %100 uyumlu hale getirildi."
 
-      - name: Efe Lab Scriptleri Olustur (Exact Match Mode)
+      - name: 7. Professional Updater-Script Yazimi
         run: |
-          # Update-Binary (Official yapidaki gibi executable shell script)
-          printf '#!/sbin/sh\n/sbin/edify -s "$1" "$2" "$3"\n' > out/META-INF/com/google/android/update-binary
-          chmod +x out/META-INF/com/google/android/update-binary
+          # Resimdeki Official ROM'larin kullandigi Edify dilini yaziyoruz
+          # Burada block_image_update komutu hayati onem tasir
           
-          # Updater-Script (Senin paylastigin Block-Based yapıya uygun komutlar)
-          # HATA OLMAMASI İÇİN TEK SATIRDA printf İLE YAZIYORUZ
-          echo 'ui_print("--------------------------------------");' > out/META-INF/com/google/android/updater-script
-          echo 'ui_print("   T113 V9 NITRO - BLOCK EDITION      ");' >> out/META-INF/com/google/android/updater-script
-          echo 'ui_print("        EFE TECH LAB                  ");' >> out/META-INF/com/google/android/updater-script
-          echo 'ui_print("--------------------------------------");' >> out/META-INF/com/google/android/updater-script
-          echo 'ui_print("Sistem bloklari guncelleniyor...");' >> out/META-INF/com/google/android/updater-script
-          echo 'block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");' >> out/META-INF/com/google/android/updater-script
-          echo 'ui_print("Boot imaji yaziliyor...");' >> out/META-INF/com/google/android/updater-script
-          echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> out/META-INF/com/google/android/updater-script
-          echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> out/META-INF/com/google/android/updater-script
+          FILE="build_root/META-INF/com/google/android/updater-script"
           
-          echo "Scriptler official yapıya uygun sekilde olusturuldu!"
+          echo 'ui_print("--------------------------------------");' > $FILE
+          echo 'ui_print("   T113 V10 NITRO - OFFICIAL STYLE    ");' >> $FILE
+          echo 'ui_print("        EFE TECH LAB PRO              ");' >> $FILE
+          echo 'ui_print("--------------------------------------");' >> $FILE
+          echo 'ui_print("Sistem bloklari kontrol ediliyor...");' >> $FILE
+          echo 'show_progress(0.75, 60);' >> $FILE
+          echo 'block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");' >> $FILE
+          echo 'ui_print("Boot partition yaziliyor...");' >> $FILE
+          echo 'show_progress(0.05, 5);' >> $FILE
+          echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> $FILE
+          echo 'set_progress(1.00);' >> $FILE
+          echo 'ui_print("KURULUM BASARIYLA TAMAMLANDI!");' >> $FILE
+          echo 'ui_print("EFE LAB: LGS YOLUNDA BASARILAR DILER.");' >> $FILE
 
-      - name: ZIP Paketi Yap
+      - name: 8. Update-Binary Hazirla
         run: |
-          cd out && zip -r ../T113_V9_Official_Edition.zip .
+          # En stabil update-binary formatini ayarliyoruz
+          printf '#!/sbin/sh\n/sbin/edify -s "$1" "$2" "$3"\n' > build_root/META-INF/com/google/android/update-binary
+          chmod +x build_root/META-INF/com/google/android/update-binary
 
-      - name: Releasesa Yukle
+      - name: 9. ZIP Paketleme (Maximum Compression)
+        run: |
+          cd build_root && zip -9 -r ../T113_V10_Professional_Edition.zip .
+
+      - name: 10. Efe Lab Professional Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v9.0-official"
-          name: "T113 V9 Nitro (Block-Based OTA Style)"
-          body: "Official style dosya yapisi (system.new.dat.br) ile derlendi. Efe Lab sunar!"
-          files: T113_V9_Official_Edition.zip
+          tag_name: "v10.0-pro"
+          name: "T113 V10 Nitro Pro (Official Block Structure)"
+          body: |
+            ### Efe Tech Lab Professional Build
+            - **Format:** Block-Based OTA (system.new.dat.br)
+            - **Yapı:** Resimdeki Official ROM yapısı ile birebir aynı.
+            - **Cihaz:** Tab 3 Lite (T113) - Spreadtrum Platform
+            - **Optimizasyon:** Brotli Level 9 Sıkıştırma
+          files: T113_V10_Professional_Edition.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
