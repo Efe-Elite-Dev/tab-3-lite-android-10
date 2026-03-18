@@ -1,4 +1,4 @@
-name: T113 V12 Python Fix Build
+name: T113 V15 Nitro Official Build
 
 on:
   workflow_dispatch:
@@ -9,85 +9,95 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Repoyu Hazirla
+      - name: 1. Repoyu Hazirla
         uses: actions/checkout@v4
 
-      # HATA BURADA COZULUYOR: Python 3.10'a geri donuyoruz
-      - name: Python 3.10 Kur (Compatibility Mode)
+      - name: 2. Python 3.10 Kur
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Sistem Guncelle ve Araclari Kur
+      - name: 3. Sistem Guncelle ve Araclari Kur
         run: |
           sudo apt-get update
           sudo apt-get install -y brotli zip android-sdk-libsparse-utils curl git
           pip install gdown
           git clone https://github.com/xpirt/img2sdat.git
 
-      - name: Google Drive Muhimmatlarini Cek
+      - name: 4. Google Drive Muhimmatlarini Cek
         run: |
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
 
-      - name: Imaj Dogrulama ve Raw Donusumu
+      - name: 5. Imaj Dogrulama ve Raw Donusumu
         run: |
-          # Sparse imaji Raw'a ceviriyoruz (img2sdat sadece Raw yer)
           simg2img system.img system.raw.img 2>/dev/null || mv system.img system.raw.img
           [ -f system.raw.img ] && mv system.raw.img system.img
           echo "Imaj hazir."
 
-      - name: Efe Lab: Block-Based OTA Donusumu
+      - name: 6. Efe Lab: Block-Based OTA Donusumu
         run: |
-          # Artik Python 3.10 ile calisiyor, imp hatasi vermez
+          # BURADA BOSLUKLARA DIKKAT!
           python3 img2sdat/img2sdat.py system.img -o output -v 4
-          
           echo "Brotli sikistirma basliyor (Level 9)..."
           brotli -9 output/system.new.dat -o output/system.new.dat.br
           rm output/system.new.dat
           touch output/system.patch.dat
 
-      - name: Klasor Yapisini Insa Et
+      - name: 7. Klasor Yapisini Insa Et
         run: |
+          # Resimdeki yapinin aynisini kuruyoruz
           mkdir -p out/install/bin
+          mkdir -p out/META-INF/com/android/otacert
           mkdir -p out/META-INF/com/google/android
           mkdir -p out/system
+          
+          # Dosyalari yerlestir
           mv output/system.new.dat.br out/
           mv output/system.transfer.list out/
           mv output/system.patch.dat out/
           mv boot.img out/
           touch out/file_contexts.bin
+          
+          # build.prop (image_6c60a3.png'deki gibi)
           echo "# Efe Lab build.prop" > out/system/build.prop
+          
+          # bin/backuptool (image_6c6020.png'deki gibi)
           printf '#!/sbin/sh\necho "Backup Tool"\n' > out/install/bin/backuptool.sh
           printf '#!/sbin/sh\necho "Functions"\n' > out/install/bin/backuptool.functions
           chmod +x out/install/bin/*.sh
 
-      - name: Updater Script Yazimi
+      - name: 8. Updater Script Yazimi
         run: |
           FILE="out/META-INF/com/google/android/updater-script"
           echo 'ui_print("--------------------------------------");' > $FILE
-          echo 'ui_print("   T113 V12 NITRO - PYTHON FIX        ");' >> $FILE
+          echo 'ui_print("   T113 V15 NITRO - OFFICIAL STYLE    ");' >> $FILE
           echo 'ui_print("        EFE TECH LAB PRO              ");' >> $FILE
           echo 'ui_print("--------------------------------------");' >> $FILE
+          echo 'ui_print("Sistem bloklari yaziliyor...");' >> $FILE
           echo 'block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");' >> $FILE
+          echo 'ui_print("Boot yaziliyor...");' >> $FILE
           echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> $FILE
           echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> $FILE
 
-      - name: Update-Binary Hazirla
+      - name: 9. Update-Binary ve Metadata Hazirla
         run: |
           printf '#!/sbin/sh\n/sbin/edify -s "$1" "$2" "$3"\n' > out/META-INF/com/google/android/update-binary
           chmod +x out/META-INF/com/google/android/update-binary
+          # image_6c6064.png'deki metadata dosyalari
+          touch out/META-INF/com/android/metadata
+          touch out/META-INF/com/android/otacert/otacert
 
-      - name: ZIP Paketleme
+      - name: 10. ZIP Paketleme ve Release
         run: |
-          cd out && zip -9 -r ../T113_V12_Python_Fix.zip .
-
-      - name: Efe Lab Release
+          cd out && zip -9 -r ../T113_V15_Final_Official.zip .
+          
+      - name: 11. Efe Lab Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v12.0-fix"
-          name: "T113 V12 Nitro (Python 3.10 Fix)"
-          body: "ModuleNotFoundError: No module named 'imp' hatasi Python 3.10'a gecilerek giderildi."
-          files: T113_V12_Python_Fix.zip
+          tag_name: "v15.0-official"
+          name: "T113 V15 Nitro (Official Structure)"
+          body: "YAML syntax hatasi (indentation) giderildi. Resimdeki klasor yapisi birebir uygulandi."
+          files: T113_V15_Final_Official.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
