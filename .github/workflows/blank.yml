@@ -1,74 +1,64 @@
-name: T113 V8 Nitro Android 10 Final Build
+name: T113 V8 Nitro Auto-Build (Efe Lab)
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - first-tab-3-lite-android-10  # Sadece bu dalda bir degisiklik olunca calisir
+  workflow_dispatch: # İstersen yine de manuel baslatabilirsin
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📂 Repoyu Hazırla
+      - name: 📂 Repoyu Cek
         uses: actions/checkout@v4
+        with:
+          ref: first-tab-3-lite-android-10 # Belirledigin ozel dalı baz alir
 
-      - name: 🛠️ Efe Lab Gerekli Araçları Kur
+      - name: 🛠️ Efe Lab Aracları Kur
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl abootimg python3-pip
           pip install gdown
 
-      - name: 🏎️ Drive'dan system.img Çek (Efe Lab Hızı)
+      - name: 🏎️ Drive'dan Muhimmatlari Cek (Efe Lab Hızı)
         run: |
-          # Senin verdiğin Drive ID'si sabitlendi
+          # system.img çekiliyor
           gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O system.img
-          echo "System imajı Efe Lab sunucularına indi!"
+          # boot.img çekiliyor (Eger ID farklıysa burayı güncellemelisin)
+          gdown --id 1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE -O boot.img 
 
-      - name: 🏗️ Boot.img ve Kernel Analizi
+      - name: 🏗️ TWRP Paketleme Operasyonu
         run: |
-          # Repondaki boot.img'ı parçalıyoruz
-          if [ -f "boot.img" ]; then
-            abootimg -x boot.img
-            echo "Kernel ve Ramdisk söküldü!"
-          else
-            echo "HATA: boot.img bulunamadı!"
-            exit 1
-          fi
-
-      - name: 🧬 META-INF ve TWRP Scriptlerini Oluştur
-        run: |
-          # Klasör hiyerarşisini kur
           mkdir -p flashable/META-INF/com/google/android
           mkdir -p flashable/images
-          
-          # Dosyaları taşı
           cp system.img flashable/images/system.img
           cp boot.img flashable/images/boot.img
           
-          # UPDATE-BINARY (Efe Lab Standard)
+          # UPDATE-BINARY
           echo '#!/sbin/sh' > flashable/META-INF/com/google/android/update-binary
           
-          # UPDATER-SCRIPT (Senin PIT yollarına göre)
+          # UPDATER-SCRIPT (Efe Lab Ozel)
           cat <<EOF > flashable/META-INF/com/google/android/updater-script
           ui_print("--------------------------------------");
-          ui_print("   T113 V8 NITRO - ANDROID 10       ");
+          ui_print("   T113 V8 NITRO - AUTOMATIC BUILD  ");
           ui_print("        EFE TECH LAB                ");
+          ui_print("   BRANCH: FIRST-TAB-3-LITE         ");
           ui_print("--------------------------------------");
-          ui_print("Sistem yukleniyor... (Efe Lab Gururla Sunar)");
+          ui_print("Efe Lab: Yukleme basladi...");
           package_extract_file("images/system.img", "/dev/block/platform/sprd-sdhci.3/by-name/system");
-          ui_print("Kernel (Boot) yaziliyor...");
           package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");
           ui_print("--------------------------------------");
-          ui_print("   ISLEM TAMAM! REBOOT ET AGA       ");
+          ui_print("   ISLEM BASARILI! REBOOT ET AGA    ");
           ui_print("--------------------------------------");
           EOF
 
-      - name: 🎁 ZIP Paketini Hazırla
+      - name: 🎁 ZIP Olustur
         run: |
-          cd flashable
-          zip -r ../T113_V8_Android10_Flashable.zip .
-          echo "Paketleme bitti!"
-
-      - name: 🚀 Final ZIP'i Artifact Olarak Yükle
+          cd flashable && zip -r ../T113_V8_First_Edition.zip .
+          
+      - name: 🚀 ZIP'i Artifact Olarak Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: T113-V8-EfeLab-Package
-          path: T113_V8_Android10_Flashable.zip
+          name: T113-V8-First-Package
+          path: T113_V8_First_Edition.zip
