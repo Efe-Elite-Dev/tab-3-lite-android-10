@@ -27,7 +27,7 @@ jobs:
           # boot.img indiriliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
 
-      - name: 🪄 Efe Lab: Sparse Mode (Boyut Dusurme)
+      - name:  Efe Lab: Sparse Mode (Boyut Dusurme)
         run: |
           mv system.img system.raw.img
           img2simg system.raw.img system.img
