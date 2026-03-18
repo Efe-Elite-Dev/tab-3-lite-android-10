@@ -1,4 +1,4 @@
-name: T113 V11 Nitro Pro Fix
+name: T113 V12 Python Fix Build
 
 on:
   workflow_dispatch:
@@ -12,10 +12,16 @@ jobs:
       - name: Repoyu Hazirla
         uses: actions/checkout@v4
 
+      # HATA BURADA COZULUYOR: Python 3.10'a geri donuyoruz
+      - name: Python 3.10 Kur (Compatibility Mode)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Sistem Guncelle ve Araclari Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 python3-pip brotli zip android-sdk-libsparse-utils curl git
+          sudo apt-get install -y brotli zip android-sdk-libsparse-utils curl git
           pip install gdown
           git clone https://github.com/xpirt/img2sdat.git
 
@@ -26,62 +32,62 @@ jobs:
 
       - name: Imaj Dogrulama ve Raw Donusumu
         run: |
-          # 29. SATIR VE CIVARI BURASI - EN GÜVENLİ FORMATTA YAZILDI
-          if img2simg system.img system.raw.img 2>/dev/null; then
-            mv system.raw.img system.img
-          elif simg2img system.img system.raw.img 2>/dev/null; then
-            mv system.raw.img system.img
-          fi
-          echo "Imaj kontrolu tamamlandi."
+          # Sparse imaji Raw'a ceviriyoruz (img2sdat sadece Raw yer)
+          simg2img system.img system.raw.img 2>/dev/null || mv system.img system.raw.img
+          [ -f system.raw.img ] && mv system.raw.img system.img
+          echo "Imaj hazir."
 
-      - name: Block-Based OTA Donusumu
+      - name: Efe Lab: Block-Based OTA Donusumu
         run: |
+          # Artik Python 3.10 ile calisiyor, imp hatasi vermez
           python3 img2sdat/img2sdat.py system.img -o output -v 4
+          
+          echo "Brotli sikistirma basliyor (Level 9)..."
           brotli -9 output/system.new.dat -o output/system.new.dat.br
           rm output/system.new.dat
           touch output/system.patch.dat
 
       - name: Klasor Yapisini Insa Et
         run: |
-          mkdir -p build_root/install/bin
-          mkdir -p build_root/META-INF/com/google/android
-          mkdir -p build_root/system
-          mv output/system.new.dat.br build_root/
-          mv output/system.transfer.list build_root/
-          mv output/system.patch.dat build_root/
-          mv boot.img build_root/
-          touch build_root/file_contexts.bin
-          echo "# Efe Lab build.prop" > build_root/system/build.prop
-          printf '#!/sbin/sh\necho "Backup Tool"\n' > build_root/install/bin/backuptool.sh
-          printf '#!/sbin/sh\necho "Functions"\n' > build_root/install/bin/backuptool.functions
-          chmod +x build_root/install/bin/*.sh
+          mkdir -p out/install/bin
+          mkdir -p out/META-INF/com/google/android
+          mkdir -p out/system
+          mv output/system.new.dat.br out/
+          mv output/system.transfer.list out/
+          mv output/system.patch.dat out/
+          mv boot.img out/
+          touch out/file_contexts.bin
+          echo "# Efe Lab build.prop" > out/system/build.prop
+          printf '#!/sbin/sh\necho "Backup Tool"\n' > out/install/bin/backuptool.sh
+          printf '#!/sbin/sh\necho "Functions"\n' > out/install/bin/backuptool.functions
+          chmod +x out/install/bin/*.sh
 
-      - name: Professional Script Yazimi
+      - name: Updater Script Yazimi
         run: |
-          FILE="build_root/META-INF/com/google/android/updater-script"
+          FILE="out/META-INF/com/google/android/updater-script"
           echo 'ui_print("--------------------------------------");' > $FILE
-          echo 'ui_print("   T113 V11 NITRO - BLOCK EDITION     ");' >> $FILE
+          echo 'ui_print("   T113 V12 NITRO - PYTHON FIX        ");' >> $FILE
           echo 'ui_print("        EFE TECH LAB PRO              ");' >> $FILE
           echo 'ui_print("--------------------------------------");' >> $FILE
           echo 'block_image_update("/dev/block/platform/sprd-sdhci.3/by-name/system", package_extract_file("system.transfer.list"), "system.new.dat.br", "system.patch.dat");' >> $FILE
-          echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> >> $FILE
-          echo 'ui_print("KURULUM BASARIYLA TAMAMLANDI!");' >> $FILE
+          echo 'package_extract_file("boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> $FILE
+          echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> $FILE
 
       - name: Update-Binary Hazirla
         run: |
-          printf '#!/sbin/sh\n/sbin/edify -s "$1" "$2" "$3"\n' > build_root/META-INF/com/google/android/update-binary
-          chmod +x build_root/META-INF/com/google/android/update-binary
+          printf '#!/sbin/sh\n/sbin/edify -s "$1" "$2" "$3"\n' > out/META-INF/com/google/android/update-binary
+          chmod +x out/META-INF/com/google/android/update-binary
 
       - name: ZIP Paketleme
         run: |
-          cd build_root && zip -9 -r ../T113_V11_Block_Success.zip .
+          cd out && zip -9 -r ../T113_V12_Python_Fix.zip .
 
-      - name: Efe Lab Professional Release
+      - name: Efe Lab Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v11.0-pro"
-          name: "T113 V11 Nitro Pro (Block Format)"
-          body: "Line 29 hatasi giderildi. Tiyaptip benzer official yapı hazır!"
-          files: T113_V11_Block_Success.zip
+          tag_name: "v12.0-fix"
+          name: "T113 V12 Nitro (Python 3.10 Fix)"
+          body: "ModuleNotFoundError: No module named 'imp' hatasi Python 3.10'a gecilerek giderildi."
+          files: T113_V12_Python_Fix.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
