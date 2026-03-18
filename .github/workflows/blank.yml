@@ -1,6 +1,8 @@
-name: T113 V8 Nitro Lite Fix
+name: T113 V8 Nitro Lite Ultimate
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -20,14 +22,17 @@ jobs:
 
       - name: 🏎️ Drive'dan Dosyalari Cek
         run: |
+          # system.img indiriliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
+          # boot.img indiriliyor
           gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O boot.img || echo "Boot yok"
 
-      - name: 🪄 Efe Lab: Sparse Mode
+      - name: 🪄 Efe Lab: Sparse Mode (Boyut Dusurme)
         run: |
           mv system.img system.raw.img
           img2simg system.raw.img system.img
           rm -f system.raw.img
+          echo "Diyet tamamlandi, dosya kuculdu!"
 
       - name: 🏗️ TWRP Paketleme
         run: |
@@ -36,10 +41,9 @@ jobs:
           cp system.img flashable/images/system.img
           cp boot.img flashable/images/boot.img
           
-          # Update-binary olustur
+          # Scriptleri tertemiz olustur
           printf '#!/sbin/sh\n' > flashable/META-INF/com/google/android/update-binary
           
-          # Updater-script olustur (En saglam yontem)
           echo 'ui_print("--------------------------------------");' > flashable/META-INF/com/google/android/updater-script
           echo 'ui_print("   T113 V8 NITRO - LITE EDITION       ");' >> flashable/META-INF/com/google/android/updater-script
           echo 'ui_print("        EFE TECH LAB                  ");' >> flashable/META-INF/com/google/android/updater-script
@@ -48,16 +52,16 @@ jobs:
           echo 'package_extract_file("images/boot.img", "/dev/block/platform/sprd-sdhci.3/by-name/boot");' >> flashable/META-INF/com/google/android/updater-script
           echo 'ui_print("ISLEM TAMAM! EFE LAB SUNAR.");' >> flashable/META-INF/com/google/android/updater-script
 
-      - name: 🎁 ZIP Olustur
+      - name: 🎁 ZIP Paketi Yap
         run: |
-          cd flashable && zip -9 -r ../T113_V8_Lite_Edition.zip .
+          cd flashable && zip -9 -r ../T113_V8_Lite_Final.zip .
 
       - name: 🚀 Efe Lab: Release Olustur
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v8.2-lite-ultimate-fix"
-          name: "T113 V8 Nitro Lite Edition Ultimate Fix"
-          body: "Line 26 hatasi kokten giderildi. Efe Lab sunar!"
-          files: T113_V8_Lite_Edition.zip
+          tag_name: "v8.2-lite-success"
+          name: "T113 V8 Nitro Lite Edition (Gerçek Versiyon)"
+          body: "10 saniyelik sahte basarilara inat, Efe Lab gerçek Lite ROM'u sunar!"
+          files: T113_V8_Lite_Final.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
