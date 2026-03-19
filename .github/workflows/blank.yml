@@ -1,85 +1,56 @@
-name: T113 Efe Tech - Full Link Drive Build
+name: T113 Custom ROM Build
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Repoyu Getir
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 2. Gerekli Araclar
-        run: sudo apt-get update && sudo apt-get install -y zip wget curl
-
-      - name: 3. Full Linkler Üzerinden Drive'ı Zorla
+      - name: Install Tools
         run: |
-          set -e
-          # Drive onay mekanizmasını tam linkten ayıklayan fonksiyon
-          pull_full_link() {
-            URL=$1
-            FILE=$2
-            echo "${FILE} için tam link zorlanıyor: ${URL}"
-            
-            # Linkten ID'yi ayıkla
-            ID=$(echo $URL | sed -r 's/.*d\/([a-zA-Z0-9_-]+).*/\1/; s/.*id=([a-zA-Z0-9_-]+).*/\1/')
-            
-            # Onay kodunu ve çerezleri al (En agresif yöntem)
-            CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=${ID}" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
-            
-            # Dosyayı indir
-            wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${ID}" -O "${FILE}" || wget --no-check-certificate "https://docs.google.com/uc?export=download&id=${ID}" -O "${FILE}"
-            
-            rm -rf /tmp/cookies.txt
-          }
+          sudo apt-get update
+          sudo apt-get install -y python3-pip zip wget img2simg
+          pip install gdown
 
-          # SENİN VERDİĞİN FULL LİNKLER
-          pull_full_link "https://drive.google.com/file/d/1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB/view?usp=sharing" "system.img"
-          pull_full_link "https://drive.google.com/file/d/1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv/view?usp=sharing" "boot.img"
-          pull_full_link "https://drive.google.com/file/d/1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3/view?usp=sharing" "sprdcp.img"
-          pull_full_link "https://drive.google.com/file/d/1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP/view?usp=sharing" "spl.img"
-          pull_full_link "https://drive.google.com/file/d/1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y/view?usp=sharing" "sboot.img"
-
-          # DOSYA KONTROLÜ (Loglarda boyutları gör aga)
-          ls -lh *.img
-
-      - name: 4. Paketleme
+      - name: Download Custom Image
         run: |
-          mkdir -p output/META-INF/com/google/android
-          
-          # Binary bulucu (GitHub Actions hata vermesin diye güvenlik önlemi)
-          BINARY=$(find . -name "update-binary" | head -n 1)
-          if [ -n "$BINARY" ]; then
-            cp "$BINARY" output/META-INF/com/google/android/
-          else
-            touch output/META-INF/com/google/android/update-binary
-          fi
+          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img
 
-          cat <<EOF > output/META-INF/com/google/android/updater-script
-          ui_print("================================");
-          ui_print("   EFE TECH GALAXY CRUSHER V1   ");
-          ui_print("================================");
-          package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
-          package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-          ui_print("ISLEM TAMAM AGA!");
+      - name: Inject Custom Build Prop
+        run: |
+          # Build prop içeriğini bir dosyaya yazalım
+          cat <<EOF > my_build.prop
+          $(cat <<'PROPS'
+          # Efe Tech Custom Build Props
+          ro.build.id=OPM7.181205.001
+          ro.build.display.id=e_goyavewifi-EfeTech-v1
+          ro.product.model=SM-T113NU
+          ro.sf.hwrotation=270
+          ro.config.zram.support=true
+          ro.config.swappiness=130
+          dalvik.vm.heapsize=128m
+          # ... (Diğer tüm satırları buraya ekleyebilirsin)
+          PROPS
+          )
           EOF
-          
-          chmod 755 output/META-INF/com/google/android/update-binary || true
+          # Not: Burada imajı mount edip dosyayı değiştirmek için loop mount yetkisi gerekir.
+          # GitHub runner'da 'sudo mount' kullanarak system.img içindeki build.prop'u güncelleyeceğiz.
 
-      - name: 5. Paketle ve Release Gönder
+      - name: Create Flashable Zip
         run: |
-          mv *.img output/ 2>/dev/null || true
-          cd output && zip -r9 ../EfeTech_FullLink_Build.zip . && cd ..
+          mkdir output
+          mv custom_system.img output/system.img
+          # Meta-inf ve diğer dosyaları ekleme adımı buraya gelecek
+          zip -r EfeTech_Custom_ROM.zip output/
 
-      - name: 6. GitHub Release
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_FullLink_Build.zip
-          tag_name: "v1.0.0-FullLink"
-          name: "Efe Tech Full Link Build"
+          files: EfeTech_Custom_ROM.zip
+          tag_name: v1.1.0-Custom
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
