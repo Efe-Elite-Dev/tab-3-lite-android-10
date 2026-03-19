@@ -1,4 +1,4 @@
-name: T113 Custom ROM Build
+name: T113 Android 10 Ultra Optimize Build
 
 on:
   workflow_dispatch:
@@ -6,51 +6,96 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Install Essential Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip zip wget img2simg
+          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils e2tools
           pip install gdown
 
-      - name: Download Custom Image
+      - name: Download Custom System Image
         run: |
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img
 
-      - name: Inject Custom Build Prop
+      - name: Create Ultra-Optimized Build Prop
         run: |
-          # Build prop içeriğini bir dosyaya yazalım
-          cat <<EOF > my_build.prop
-          $(cat <<'PROPS'
-          # Efe Tech Custom Build Props
-          ro.build.id=OPM7.181205.001
-          ro.build.display.id=e_goyavewifi-EfeTech-v1
+          cat <<EOF > build.prop
+          # --- EFE TECH ULTIMATE OPTIMIZATION (ANDROID 10) ---
+          ro.build.id=QP1A.190711.020
+          ro.build.display.id=EfeTech_T113_A10_Optimized_v1
+          ro.build.version.release=10
+          ro.build.version.sdk=29
           ro.product.model=SM-T113NU
-          ro.sf.hwrotation=270
+          ro.product.brand=samsung
+          ro.product.device=goyavewifi
+          
+          # --- RAM & PERFORMANCE TWEAKS ---
+          ro.config.low_ram=true
+          persist.sys.force_highendgfx=false
+          ro.config.max_starting_bg=2
+          ro.sys.fw.bg_apps_limit=3
           ro.config.zram.support=true
-          ro.config.swappiness=130
+          ro.config.zram.disksize=512M
+          ro.config.swappiness=150
+          
+          # --- GRAPHICS & UI ---
+          ro.sf.hwrotation=270
+          ro.sf.lcd_density=160
+          debug.hwui.renderer=opengl
+          debug.performance.tuning=1
+          video.accelerate.hw=1
+          persist.sys.ui.hw=1
+          
+          # --- DALVIK VM (Low Memory Optimization) ---
+          dalvik.vm.heapstartsize=8m
+          dalvik.vm.heapgrowthlimit=64m
           dalvik.vm.heapsize=128m
-          # ... (Diğer tüm satırları buraya ekleyebilirsin)
-          PROPS
-          )
+          dalvik.vm.heaptargetutilization=0.75
+          dalvik.vm.heapminfree=512k
+          dalvik.vm.heapmaxfree=2m
+          dalvik.vm.dex2oat-flags=--no-watch-dog
+          
+          # --- NETWORK & BATTERY ---
+          wifi.supplicant_scan_interval=180
+          pm.sleep_mode=1
+          ro.ril.power_save=1
+          
+          # --- SYSTEM IDENT ---
+          ro.lineage.version=17.1-EfeTech-A10
+          persist.sys.usb.config=mtp,adb
           EOF
-          # Not: Burada imajı mount edip dosyayı değiştirmek için loop mount yetkisi gerekir.
-          # GitHub runner'da 'sudo mount' kullanarak system.img içindeki build.prop'u güncelleyeceğiz.
 
-      - name: Create Flashable Zip
+      - name: Inject & Repack Image
         run: |
-          mkdir output
-          mv custom_system.img output/system.img
-          # Meta-inf ve diğer dosyaları ekleme adımı buraya gelecek
-          zip -r EfeTech_Custom_ROM.zip output/
+          # Sparse to RAW
+          simg2img custom_system.img system_raw.img || mv custom_system.img system_raw.img
+          
+          # Inject Build Prop
+          e2cp build.prop system_raw.img:/build.prop
+          e2cp build.prop system_raw.img:/system/build.prop || true
+          e2cp build.prop system_raw.img:/system/etc/build.prop || true
+          
+          # RAW to Sparse
+          img2simg system_raw.img system.img
 
-      - name: Upload Release
+      - name: Prepare Flashable Zip
+        run: |
+          mkdir -p output/META-INF/com/google/android
+          cp -r META-INF output/ || echo "META-INF yok, manuel yukleme."
+          mv system.img output/
+          cd output && zip -r ../EfeTech_T113_A10_Optimized.zip .
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_Custom_ROM.zip
-          tag_name: v1.1.0-Custom
+          files: EfeTech_T113_A10_Optimized.zip
+          tag_name: v1.2.0-A10-Optimized
+          name: "T113 Android 10 - Ultra Optimized"
+          body: "Efe Tech Gururla Sunar: T113 için en hızlı Android 10 deneyimi. Low RAM modu aktif edildi, ZRAM optimize edildi."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
