@@ -2,8 +2,8 @@ name: T113 Android 10 Auto-Build & Optimize
 
 on:
   push:
-    branches: [ "main", "master" ] # Kodu her güncellediğinde otomatik başlar
-  workflow_dispatch: # Manuel başlatma butonu da durur
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,36 +12,36 @@ jobs:
       - name: Repo Checkout
         uses: actions/checkout@v4
 
-      - name: Sistem Araclarini Hazirla
+      - name: Sistem Araclarini Hazirla (Paket Fix)
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 python3-pip zip unzip img2simg simg2img e2fsprogs p7zip-full
+          # img2simg ve simg2img artik bu paketin icinde:
+          sudo apt-get install -y python3 python3-pip zip unzip android-sdk-libsparse-utils e2fsprogs p7zip-full
+          # Pip'i garantiye al
+          python3 -m pip install --upgrade pip
 
       - name: Dosyalari Drive'dan Cek
         run: |
           pip install gdown
-          # Boot.img (Senin Kernel)
+          # Boot.img (Kernel)
           gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img
           # Android 10 System.img
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img
 
       - name: Imaj Isleme ve Yetkilendirme
         run: |
-          # Klasörleri oluştur ve root yetkisi ver
           sudo mkdir -p update/system
           sudo mkdir -p update/META-INF/com/google/android
           sudo chmod -R 777 update/
           
-          # Sparse imajı RAW'a çevir (Android standartı)
+          # Yeni paketteki komutlarla sparse imaji RAW'a cevir
+          img2simg --version || echo "img2simg yuklu"
           simg2img custom_system.img custom_raw.img || cp custom_system.img custom_raw.img
           
-          # Mount et ve dosyaları aktar
           sudo mkdir -p /mnt/custom
           sudo mount -o loop custom_raw.img /mnt/custom
           sudo cp -rp /mnt/custom/* update/system/
           sudo umount /mnt/custom
-          
-          # Tüm sistem dosyalarına işlem yapabilmek için izinleri aç
           sudo chmod -R 777 update/system/
 
       - name: 10 Kritik XML Enjeksiyonu
@@ -49,7 +49,6 @@ jobs:
           cd update/system
           sudo mkdir -p etc/vintf etc/permissions etc/sysconfig res/xml
           
-          # XML'leri 'tee' ile yönetici olarak basıyoruz (Hata almaz)
           echo '<manifest version="1.0" type="framework"><hal format="hidl"><name>android.hardware.graphics.allocator</name><transport>hwbinder</transport><version>2.0</version></hal></manifest>' | sudo tee etc/vintf/manifest.xml > /dev/null
           echo '<compatibility-matrix version="1.0" type="framework"><kernel version="3.10.x" /><sepolicy><kernel-sepolicy-version>30</kernel-sepolicy-version></sepolicy></compatibility-matrix>' | sudo tee etc/vintf/compatibility_matrix.xml > /dev/null
           echo '<audioPolicyConfiguration version="1.0" xmlns:xi="http://www.w3.org/2001/XInclude"><modules><module name="primary" halVersion="2.0"><attachedDevices><item>Speaker</item></attachedDevices></module></modules></audioPolicyConfiguration>' | sudo tee etc/audio_policy_configuration.xml > /dev/null
@@ -63,7 +62,6 @@ jobs:
 
       - name: Super Low-RAM & Akicilik Fix
         run: |
-          # build.prop'a cihazı uçuracak ayarlar
           sudo chmod 777 update/system/build.prop
           cat <<EOF | sudo tee -a update/system/build.prop
           # EFE TECH T113 ANDROID 10 SPEED FIX
@@ -103,7 +101,7 @@ jobs:
           cd update
           zip -r9 ../T113_A10_Efe_Elite.zip .
           
-      - name: ROM'u Artifact Olarak Yayınla
+      - name: ROM Artifact Olarak Yukle
         uses: actions/upload-artifact@v4
         with:
           name: T113-A10-Elite-ROM
