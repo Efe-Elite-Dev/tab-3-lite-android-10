@@ -1,4 +1,4 @@
-name: T113 Android 10 Hybrid Ultra Build
+name: T113 Android 10 Final TWRP Build
 
 on:
   workflow_dispatch:
@@ -12,75 +12,87 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Essential Tools
+      - name: Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils e2tools
+          # T113 için gerekli imaj ve paketleme araçları
+          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils brotli e2tools p7zip-full
+          # İmajı .dat.br formatına çeviren araç
+          wget https://raw.githubusercontent.com/xpirt/img2sdat/master/img2sdat.py
           pip install gdown --break-system-packages
 
-      - name: Download Components (Direct IMG)
+      - name: Download Files
         run: |
-          # 1. Boot Image (Daha önce çalışan ID)
+          # 1. Stok Boot (Kernel) - T113'ün kalbi
           gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img --fuzzy
-          
-          # 2. Custom System Image (Senin Android 10 dosyan)
+          # 2. Senin Android 10 Custom System Image
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O system_source.img --fuzzy
-          
-          # Kontrol
-          ls -lh boot.img system_source.img
 
-      - name: Create T113 Optimized Build Prop
+      - name: T113 Special Optimization (build.prop)
         run: |
           cat <<EOF > build.prop
-          # --- EFE TECH T113 ANDROID 10 FULL OPTIMIZE ---
+          # --- EFE TECH T113 STABLE ANDROID 10 ---
           ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_A10_v1.7_Final
+          ro.build.display.id=EfeTech_T113_A10_Stable_v2.0
           ro.build.version.release=10
           ro.build.version.sdk=29
           ro.product.model=SM-T113NU
-          ro.product.brand=samsung
           ro.product.device=goyavewifi
+          ro.product.board=universal7330
+          # Ekran Ters Dönme Fix
           ro.sf.hwrotation=270
           ro.sf.lcd_density=160
+          # T113 RAM Kurtarma Ayarları
           ro.config.low_ram=true
           ro.config.swappiness=180
           ro.config.zram.support=true
           ro.config.zram.disksize=512M
+          # Vivante GPU Hızlandırma
           debug.hwui.renderer=opengl
+          video.accelerate.hw=1
+          persist.sys.ui.hw=1
+          # Dalvik (1GB RAM Altı Optimizasyon)
+          dalvik.vm.heapstartsize=8m
           dalvik.vm.heapgrowthlimit=64m
           dalvik.vm.heapsize=128m
           persist.sys.usb.config=mtp,adb
           EOF
 
-      - name: Inject & Repack Image
+      - name: Convert to TWRP Format (.dat.br)
         run: |
-          # Sparse ise RAW'a çevir, değilse devam et
+          # Imajı hazırla ve build.prop göm
           simg2img system_source.img system_raw.img || mv system_source.img system_raw.img
-          
-          # build.prop dosyasını imaja göm
           e2cp build.prop system_raw.img:/build.prop
           e2cp build.prop system_raw.img:/system/build.prop || true
-          e2cp build.prop system_raw.img:/system/etc/build.prop || true
           
-          # Tekrar Sparse yap (Cihazın daha rahat okuması için)
-          img2simg system_raw.img system.img
+          # TWRP'nin okuduğu .dat.br formatına çevir
+          python3 img2sdat.py system_raw.img -o . -v 4 goyavewifi
+          brotli -q 6 system.new.dat -o system.new.dat.br
 
-      - name: Finalize Package
+      - name: Create Final Flashable ZIP
         run: |
-          mkdir output
-          mv system.img output/
-          mv boot.img output/
-          # Eğer varsa flash scriptlerini (META-INF) ekle
-          if [ -d "META-INF" ]; then cp -r META-INF output/; fi
+          mkdir -p output/META-INF/com/google/android
+          # Senin repo'ndaki TWRP scriptlerini kopyala
+          if [ -d "META-INF" ]; then
+            cp -r META-INF/* output/META-INF/
+          else
+            echo "UYARI: META-INF bulunamadı, scriptler eksik olabilir!"
+          fi
           
-          cd output && zip -r ../EfeTech_T113_A10_Final_IMG.zip .
+          # Dosyaları yerleştir
+          mv system.new.dat.br output/
+          mv system.transfer.list output/
+          mv boot.img output/
+          
+          # ZIP Paketi Oluştur
+          cd output && zip -r ../EfeTech_T113_A10_Stable.zip .
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_A10_Final_IMG.zip
-          tag_name: v1.7.0-A10-Final
-          name: "T113 Android 10 Hybrid (All IMG Mode)"
-          body: "Bütün kaynaklar .img olarak işlendi. T113 için full optimize Android 10 paketi hazır!"
+          files: EfeTech_T113_A10_Stable.zip
+          tag_name: v2.0-Stable
+          name: "SM-T113 Android 10 Stable ZIP"
+          body: "T113 (Tab 3 Lite) için tamamen optimize edilmiş, TWRP üzerinden flashlanabilir Android 10 ZIP paketi. build.prop düzenlendi."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
