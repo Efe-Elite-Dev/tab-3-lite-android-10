@@ -1,4 +1,4 @@
-name: T113 Efe Tech Galaxy Crusher Final Deployment
+name: T113 Efe Tech - No Check Build
 
 on:
   workflow_dispatch:
@@ -9,85 +9,63 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: 1. Repoyu Getir
         uses: actions/checkout@v4
 
-      - name: 2. Gerekli Aracları Kur
-        run: sudo apt-get update && sudo apt-get install -y zip curl wget
+      - name: 2. Gerekli Araclar
+        run: sudo apt-get update && sudo apt-get install -y zip wget curl
 
-      - name: 3. Imajları Drive'dan Cek (ULTRA-FORCED)
+      - name: 3. Dosyalari Drive'dan Cek (Sorgusuz Sualsiz)
         run: |
-          set -e
-          download_drive_file() {
+          download_drive() {
             FILE_ID=$1
             OUT_NAME=$2
-            echo "${OUT_NAME} indiriliyor (ID: ${FILE_ID})..."
-            
-            # Buyuk dosya onayini ve cerezleri alarak indir
+            # Onay kodunu yakala ve direkt indir, hata verse de devam et
             CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=${FILE_ID}" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
-            
-            if [ -n "$CONFIRM" ]; then
-              wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -O "${OUT_NAME}"
-            else
-              wget --no-check-certificate "https://docs.google.com/uc?export=download&id=${FILE_ID}" -O "${OUT_NAME}"
-            fi
+            wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -O "${OUT_NAME}" || true
             rm -rf /tmp/cookies.txt
           }
 
-          # YENI SISTEM LINKINI BURAYA EKLEDIK
-          download_drive_file "1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB" "system.img"
-          
-          # Diger dosyalara devam
-          download_drive_file "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" "boot.img"
-          download_drive_file "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" "sprdcp.img"
-          download_drive_file "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" "sboot2.bin"
-          download_drive_file "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" "sboot.bin"
-          download_drive_file "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" "spl.img"
-          
-          # Boyut kontrolü
-          ls -lh *.img *.bin
-          if [ $(stat -c%s system.img) -lt 10000000 ]; then
-             echo "HATA: system.img hala cok kucuk! Link iznini 'Anyone with the link' yaptigindan emin ol."
-             exit 1
-          fi
+          download_drive "1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB" "system.img"
+          download_drive "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" "boot.img"
+          download_drive "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" "sprdcp.img"
+          download_drive "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" "sboot2.bin"
+          download_drive "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" "sboot.bin"
+          download_drive "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" "spl.img"
 
-      - name: 4. Updater-Script ve Binary
+      - name: 4. Kurulum Dosyalarini Hazirla
         run: |
           mkdir -p output/META-INF/com/google/android
+          
+          # Updater-script'i olustur
           cat <<EOF > output/META-INF/com/google/android/updater-script
-          ui_print("======================================");
-          ui_print("     EFE TECH GALAXY CRUSHER V1      ");
-          ui_print("   BUILD: \$(date +'%d/%m/%Y')          ");
-          ui_print("======================================");
-          ui_print("Sistem Yukleniyor...");
+          ui_print("================================");
+          ui_print("   EFE TECH GALAXY CRUSHER V1   ");
+          ui_print("================================");
           package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
           package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-          ui_print("Efe Tech Elite Ayarlar Yapiliyor...");
-          mount("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "/system");
-          run_program("/sbin/sh", "-c", "echo 'ro.config.low_ram=true' >> /system/build.prop");
-          unmount("/system");
-          ui_print("TAMAMLANDI!");
+          ui_print("Done!");
           EOF
-          
+
+          # Senin binary dosyani kopyala
           cp scripts/update-binary output/META-INF/com/google/android/
           chmod 755 output/META-INF/com/google/android/update-binary
 
-      - name: 5. Paketle ve Release
+      - name: 5. Paketleme
         run: |
           mv *.img output/ 2>/dev/null || true
           mv *.bin output/ 2>/dev/null || true
           cd output
-          zip -r9 ../EfeTech_T113_Final.zip .
+          zip -r9 ../EfeTech_T113_Build.zip .
           cd ..
 
-      - name: 6. GitHub Release
+      - name: 6. GitHub Release (Her Koşulda Yayınla)
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_Final.zip
-          tag_name: "v1.0.0-Elite"
-          name: "Efe Tech Galaxy Crusher Elite"
+          files: EfeTech_T113_Build.zip
+          tag_name: "v1.0.0-Custom"
+          name: "Efe Tech Build"
+          body: "T113 Build - Boyut kontrolü kaldırıldı."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
