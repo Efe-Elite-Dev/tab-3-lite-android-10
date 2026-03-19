@@ -20,64 +20,52 @@ jobs:
 
       - name: Download Components (Hybrid Mode)
         run: |
-          # 1. Kaynak: Stock Boot'u içeren paket (T113 Kernel için)
+          # Drive onay sayfasını geçmek için --fuzzy ve --confirm ekledik
           gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_pack.zip --fuzzy
-          # 2. Kaynak: Senin Custom System Imajın (Android 10)
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img --fuzzy
+          
+          # Dosya boyutlarını kontrol et
+          ls -lh stock_pack.zip
+          ls -lh custom_system.img
 
-      - name: Extract Boot and Prepare System
+      - name: Extract Boot (Safe Mode)
         run: |
-          # Stock paketten boot.img'yi çek
-          7z e stock_pack.zip boot.img || unzip stock_pack.zip boot.img
-          if [ ! -f "boot.img" ]; then echo "HATA: boot.img bulunamadı!"; exit 1; fi
+          # 7z başarısız olursa bile hata kodunu yutması için '|| true' ekledik
+          7z e stock_pack.zip boot.img -y || unzip -o stock_pack.zip boot.img || true
+          
+          # Eğer boot.img hala yoksa, belki adı farklıdır veya zip bozuktur. 
+          # Dosyaları listele ki hatayı görelim.
+          if [ ! -f "boot.img" ]; then
+            echo "Kritik Hata: boot.img çıkarılamadı. Zip dosyası eksik inmiş olabilir."
+            7z l stock_pack.zip || ls -R
+            exit 1
+          fi
 
       - name: Create T113 Optimized Build Prop
         run: |
           cat <<EOF > build.prop
-          # --- EFE TECH T113 (GOYAVEWIFI) ANDROID 10 OPTIMIZATION ---
+          # --- EFE TECH T113 ANDROID 10 HYBRID ---
           ro.build.id=QP1A.190711.020
           ro.build.display.id=EfeTech_T113_A10_Stable_v1.5
           ro.build.version.release=10
           ro.build.version.sdk=29
-          
-          # --- T113 HARDWARE SPECIFIC ---
           ro.product.model=SM-T113NU
           ro.product.device=goyavewifi
-          ro.product.board=universal7330
           ro.sf.hwrotation=270
           ro.sf.lcd_density=160
-          
-          # --- RAM & LOW-END OPTIMIZATION ---
           ro.config.low_ram=true
           ro.config.swappiness=180
           ro.config.zram.support=true
           ro.config.zram.disksize=512M
-          persist.sys.force_highendgfx=false
-          
-          # --- GRAPHICS & RENDERING ---
-          # Vivante GPU için OpenGL zorlaması
           debug.hwui.renderer=opengl
-          debug.gr.num_framebuffers=3
-          video.accelerate.hw=1
-          persist.sys.ui.hw=1
-          
-          # --- DALVIK VM (1GB RAM Altı İçin En İyi Ayarlar) ---
-          dalvik.vm.heapstartsize=8m
           dalvik.vm.heapgrowthlimit=64m
           dalvik.vm.heapsize=128m
-          dalvik.vm.heaptargetutilization=0.75
-          dalvik.vm.heapminfree=512k
-          dalvik.vm.heapmaxfree=2m
-          
-          # --- SYSTEM ---
           persist.sys.usb.config=mtp,adb
-          ro.lineage.version=17.1-EfeTech-T113
           EOF
 
       - name: Inject & Repack Image
         run: |
           simg2img custom_system.img system_raw.img || mv custom_system.img system_raw.img
-          # Dosyayı sistemin göbeğine enjekte et
           e2cp build.prop system_raw.img:/build.prop
           e2cp build.prop system_raw.img:/system/build.prop || true
           e2cp build.prop system_raw.img:/system/etc/build.prop || true
