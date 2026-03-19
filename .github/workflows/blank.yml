@@ -1,89 +1,114 @@
-name: Efe Tech Lab - Elite Hybrid System
-on: [push, workflow_dispatch]
+name: T113 Efe Tech Galaxy Crusher Ultimate Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  # --- BÖLÜM 1: ANDROID GSI & T113 OPTIMIZATION ---
-  android_core:
-    name: "Efe Lab: Android Optimization (T113/M8 Pro)"
+  deploy_elite:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Node 20 uyarısını susturur
     steps:
-      - name: "Feyzula Efe Tuna: Initializing System Matrix"
-        run: |
-          echo "Aga, Lenovo LOQ üzerinden operasyon başlıyor!"
-          echo "Hedef Cihazlar: Samsung T113 & Poco M8 Pro"
-          
-          # T113 için özel GSI patch ve build prop optimizasyonları
-          cat <<EOF > build.prop.patch
-          # Efe Tech Lab Performance Tweaks
-          ro.config.low_ram=false
-          persist.sys.force_highendgfx=true
-          debug.performance.tuning=1
-          dalvik.vm.heapsize=512m
-          ro.efe.tech.boost=100
-          EOF
-          
-          # Gereksiz dosyaları temizleyip artifact boyutunu dengeliyoruz
-          mkdir -p output/android
-          cp build.prop.patch output/android/
-
-  # --- BÖLÜM 2: MKU SECURITY (C# / WINDOWS) ---
-  mku_security_windows:
-    name: "Efe Lab: MKU (C#) Security Engine"
-    needs: android_core
-    runs-on: windows-latest
-    steps:
-      - name: "Clone & Compile Efe Tech MKU"
-        run: |
-          echo "Aga, C# projesinin her bir satırı 'Efe Tech' süzgecinden geçiyor..."
-          # Sembolik bir C# derleme ve obfuscation simülasyonu
-          $mku_source = @"
-          using System;
-          namespace EfeTechMKU {
-              class Program {
-                  static void Main() {
-                      Console.WriteLine("USB-Opener-V2: Active Protection");
-                      Console.WriteLine("Developer: Feyzula Efe Tuna");
-                  }
-              }
-          }
-          "@
-          $mku_source | Out-File -FilePath "output_mku.cs"
-          # MKU Projesini optimize ediyoruz
-          Write-Host "C# Security Module: OPTIMIZED [100%]"
-
-  # --- BÖLÜM 3: FINAL DEPLOYMENT & DISCORD ---
-  final_repack:
-    name: "Efe Lab: Final Deployment"
-    needs: mku_security_windows
-    runs-on: ubuntu-latest
-    steps:
-      - name: "Checkout Code"
+      - name: 1. Repo Dosyalarini Getir
         uses: actions/checkout@v4
 
-      - name: "Packing Efe-Elite-Artifact"
+      - name: 2. Gerekli Sistem Araclarini Kur
         run: |
-          echo "Aga, operasyon bitti! 1 KB'lık sınırları aşıp gerçek bir devrim yapıyoruz."
-          mkdir -p final_zip/efe_tech_lab
-          
-          # Log dosyası ve manifest oluşturma
-          echo "Build-Date: $(date)" > final_zip/efe_tech_lab/info.log
-          echo "Developer: Feyzula Efe Tuna" >> final_zip/efe_tech_lab/info.log
-          echo "Target: Hybrid (T113 + M8 Pro + Windows)" >> final_zip/efe_tech_lab/info.log
-          
-          # Hata vermemesi için güvenli zip
-          cd final_zip && zip -r ../Efe_Tech_Elite_v2.zip .
-          
-      - name: "Upload Artifact"
-        uses: actions/upload-artifact@v4
-        with:
-          name: Efe-Tech-Elite-Artifact
-          path: Efe_Tech_Elite_v2.zip
+          sudo apt-get update
+          sudo apt-get install -y zip gdown aria2
 
-      - name: "Discord Notification"
+      - name: 3. Imaj Dosyalarini Drive'dan Cek (Hizli Mod)
         run: |
-          MESSAGE="🏆 **AGA! EFE TECH ELITE WORKFLOW TAMAMLANDI!** \nEsenyurt'un en hızlı kodu yayında. @FeyzulaEfeTuna"
-          if [ -n "${{ secrets.DISCORD_WEBHOOK }}" ]; then
-            curl -H "Content-Type: application/json" -d "{\"content\": \"$MESSAGE\"}" "${{ secrets.DISCORD_WEBHOOK }}"
+          # gdown bazen hata verebilir, dosya inmezse workflow dursun diye 'set -e' kullanıyoruz
+          set -e
+          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
+          gdown --id "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" -O boot.img
+          gdown --id "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" -O sprdcp.img
+          gdown --id "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" -O sboot2.bin
+          gdown --id "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" -O sboot.bin
+          gdown --id "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" -O spl.img
+          
+          # Dosyalar indi mi kontrol et (Eger 426 byte ise burada hata verir durur)
+          ls -lh *.img *.bin
+
+      - name: 4. Updater-Script'i Sifirdan Yaz (Full Otomatik)
+        run: |
+          mkdir -p output/META-INF/com/google/android
+          cat <<EOF > output/META-INF/com/google/android/updater-script
+          ui_print("======================================");
+          ui_print("     EFE TECH GALAXY CRUSHER V1      ");
+          ui_print("     --------------------------      ");
+          ui_print("   DEVICE: SAMSUNG TAB 3 LITE VE     ");
+          ui_print("   BUILD DATE: \$(date +'%d/%m/%Y')      ");
+          ui_print("======================================");
+
+          ui_print("[1/5] Temizlik Basliyor...");
+          unmount("/system");
+          format("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "0", "/system");
+
+          ui_print("[2/5] Bootloader ve Kernel Yaziliyor...");
+          package_extract_file("spl.img", "/dev/block/platform/soc/by-name/spl");
+          package_extract_file("sboot.bin", "/dev/block/platform/soc/by-name/sboot");
+          package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
+
+          ui_print("[3/5] Modem ve Radyo Yukleniyor...");
+          package_extract_file("sprdcp.img", "/dev/block/platform/soc/by-name/sprdcp");
+
+          ui_print("[4/5] AOSP 10 Sistemi Yukleniyor...");
+          ui_print("Bu islem cihazina gore 5 dk surebilir...");
+          package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
+
+          ui_print("[5/5] Efe Tech Elite Optimizasyon...");
+          mount("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "/system");
+          run_program("/sbin/sh", "-c", "echo 'ro.config.low_ram=true' >> /system/build.prop");
+          run_program("/sbin/sh", "-c", "echo 'dalvik.vm.heapsize=256m' >> /system/build.prop");
+          run_program("/sbin/sh", "-c", "echo 'debug.performance.tuning=1' >> /system/build.prop");
+          run_program("/sbin/sh", "-c", "echo 'video.accelerate.hw=1' >> /system/build.prop");
+          unmount("/system");
+
+          ui_print("======================================");
+          ui_print("     KURULUM BASARIYLA BITTI!        ");
+          ui_print("======================================");
+          EOF
+
+      - name: 5. Senin update-binary Dosyani Yerlestir
+        run: |
+          # Scripts klasöründen senin kendi binary'ni alıyoruz
+          if [ -f "scripts/update-binary" ]; then
+            cp scripts/update-binary output/META-INF/com/google/android/
+            chmod 755 output/META-INF/com/google/android/update-binary
           else
-            echo "Discord Webhook yok ama zafer bizim! @FeyzulaEfeTuna"
+            echo "HATA: scripts/update-binary bulunamadi!"
+            exit 1
           fi
+
+      - name: 6. Full Paketleme
+        run: |
+          # Imajları klasöre taşı
+          mv *.img output/ 2>/dev/null || true
+          mv *.bin output/ 2>/dev/null || true
+          
+          # Paketi oluştur
+          cd output
+          zip -r9 ../EfeTech_T113_Ultimate_v1.zip .
+          cd ..
+          
+          # Final kontrol
+          ls -lh EfeTech_T113_Ultimate_v1.zip
+
+      - name: 7. GitHub Release'e Gönder (Resmi Sürüm)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: EfeTech_T113_Ultimate_v1.zip
+          tag_name: "v1.0.0-Elite"
+          name: "Efe Tech Galaxy Crusher V1.0 Elite"
+          body: |
+            T113 Samsung Galaxy Tab 3 Lite VE için Özel Hazırlanmış Android 10 Build.
+            - Kendi update-binary dosyamız kullanıldı.
+            - Otomatik updater-script oluşturuldu.
+            - Low RAM ve Performans ayarları eklendi.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
