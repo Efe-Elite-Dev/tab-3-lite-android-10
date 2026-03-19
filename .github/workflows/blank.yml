@@ -1,4 +1,4 @@
-name: T113 Android 10 Porting (Stable Fix)
+name: T113 Android 10 Porting (Final Fix)
 
 on:
   workflow_dispatch:
@@ -12,7 +12,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Python 3.12'de 'imp' modülü yok, bu yüzden 3.10'a sabitliyoruz
       - name: Setup Python 3.10
         uses: actions/setup-python@v5
         with:
@@ -27,11 +26,8 @@ jobs:
 
       - name: Download Images
         run: |
-          # Stok System
           gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_system.img --fuzzy
-          # Stok Boot
           gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img --fuzzy
-          # Port ROM (Android 10)
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O port_source.img --fuzzy
 
       - name: Porting & Build Prop
@@ -39,10 +35,9 @@ jobs:
           simg2img stock_system.img stock_raw.img || mv stock_system.img stock_raw.img
           simg2img port_source.img port_raw.img || mv port_source.img port_raw.img
           
-          # T113 için özel build.prop
           cat <<EOF > build.prop
           ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_AOSP10_v3.1
+          ro.build.display.id=EfeTech_T113_AOSP10_v3.2
           ro.build.version.release=10
           ro.build.version.sdk=29
           ro.product.model=SM-T113NU
@@ -58,10 +53,11 @@ jobs:
           e2cp build.prop port_raw.img:/build.prop
           e2cp build.prop port_raw.img:/system/build.prop || true
 
-      - name: Convert to .dat.br (Block-Based)
+      - name: Convert to .dat.br (Fixed Arguments)
         run: |
-          # Python 3.10 ile scripti çalıştırıyoruz
-          python3 img2sdat_tool/img2sdat.py port_raw.img -o . -v 4 goyavewifi
+          # Parametre sırasını düzelttik: -p goyavewifi eklendi
+          python3 img2sdat_tool/img2sdat.py port_raw.img -o . -v 4 -p system
+          # Brotli sıkıştırma
           brotli -q 6 system.new.dat -o system.new.dat.br
 
       - name: Create TWRP Zip
@@ -80,7 +76,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: T113_AOSP10_Final_Port.zip
-          tag_name: v3.1-Stable
-          name: "SM-T113 AOSP 10 Port v3.1"
+          tag_name: v3.2-Final
+          name: "SM-T113 AOSP 10 Port v3.2"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
