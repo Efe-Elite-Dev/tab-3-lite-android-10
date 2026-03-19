@@ -1,4 +1,4 @@
-name: T113 Android 10 Porting (Final Fix)
+name: T113 Android 10 Final Build
 
 on:
   workflow_dispatch:
@@ -30,39 +30,56 @@ jobs:
           gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img --fuzzy
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O port_source.img --fuzzy
 
-      - name: Porting & Build Prop
+      - name: Porting & Build Prop Injection
         run: |
-          simg2img stock_system.img stock_raw.img || mv stock_system.img stock_raw.img
-          simg2img port_source.img port_raw.img || mv port_source.img port_raw.img
-          
-          cat <<EOF > build.prop
+          # build.prop'u senin attığın 8.1 değerlerine göre Android 10 için hazırladık
+          cat <<EOF > custom_build.prop
+          # --- EFE TECH T113 ANDROID 10 PORT ---
           ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_AOSP10_v3.2
+          ro.build.display.id=EfeTech_T113_A10_v3.4
           ro.build.version.release=10
           ro.build.version.sdk=29
           ro.product.model=SM-T113NU
+          ro.product.brand=samsung
+          ro.product.name=goyavewifi
           ro.product.device=goyavewifi
+          ro.product.manufacturer=samsung
+          ro.product.cpu.abi=armeabi-v7a
+          ro.product.cpu.abilist=armeabi-v7a,armeabi
+          # T113 Donanım Fixleri
           ro.sf.hwrotation=270
           ro.sf.lcd_density=160
+          ro.opengles.version=131072
+          ro.product.hardware=TSHARK_V1.0.0
+          # Performans & RAM
           ro.config.low_ram=true
-          ro.config.swappiness=180
-          debug.hwui.renderer=opengl
+          ro.config.swappiness=130
+          ro.config.zram.support=true
+          ro.config.zram.disksize=512M
+          dalvik.vm.heapstartsize=5m
+          dalvik.vm.heapgrowthlimit=48m
+          dalvik.vm.heapsize=128m
           persist.sys.usb.config=mtp,adb
           EOF
-          
-          e2cp build.prop port_raw.img:/build.prop
-          e2cp build.prop port_raw.img:/system/build.prop || true
 
-      - name: Convert to .dat.br (Fixed Arguments)
+          # Port imajını düzenle
+          simg2img port_source.img port_working.img || cp port_source.img port_working.img
+          # Bazı ROM'larda dosya adı sadece 'build' olabilir, ikisini de deniyoruz
+          e2cp custom_build.prop port_working.img:/build || true
+          e2cp custom_build.prop port_working.img:/system/build.prop || true
+          
+          # img2sdat için tekrar Sparse yap
+          img2simg port_working.img system.img
+
+      - name: Convert to .dat.br
         run: |
-          # Parametre sırasını düzelttik: -p goyavewifi eklendi
-          python3 img2sdat_tool/img2sdat.py port_raw.img -o . -v 4 -p system
-          # Brotli sıkıştırma
+          python3 img2sdat_tool/img2sdat.py system.img -o . -v 4 -p system
           brotli -q 6 system.new.dat -o system.new.dat.br
 
       - name: Create TWRP Zip
         run: |
           mkdir -p output/META-INF/com/google/android
+          # Repodaki META-INF'i çek (updater-script burada olmalı!)
           if [ -d "META-INF" ]; then cp -r META-INF/* output/META-INF/; fi
           
           mv system.new.dat.br output/
@@ -70,13 +87,13 @@ jobs:
           touch output/system.patch.dat
           mv boot.img output/
           
-          cd output && zip -r ../T113_AOSP10_Final_Port.zip .
+          cd output && zip -r ../T113_A10_Port_v3.4.zip .
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: T113_AOSP10_Final_Port.zip
-          tag_name: v3.2-Final
-          name: "SM-T113 AOSP 10 Port v3.2"
+          files: T113_A10_Port_v3.4.zip
+          tag_name: v3.4-A10
+          name: "SM-T113 Android 10 Port (8.1 Based Config)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
