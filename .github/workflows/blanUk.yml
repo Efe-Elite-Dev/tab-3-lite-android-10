@@ -1,61 +1,88 @@
-name: Efe Tech Mono-Block 100K Strategy
-on: [push, workflow_dispatch]
+name: T113 Efe Tech Ultimate Release Engine
+
+on:
+  workflow_dispatch: # Manuel başlatma butonu
+
+permissions:
+  contents: write # Release oluşturabilmek için bu izin şart!
 
 jobs:
-  efe_tech_mega_build:
-    name: "Efe Lab: T113 Ultra Optimization"
+  build_and_release:
     runs-on: ubuntu-latest
     steps:
-      - name: "Feyzula Efe Tuna: Initializing Mono-Block"
-        run: |
-          echo "Aga, Lenovo LOQ üzerinden tek ve net 100.000 satırlık operasyon başladı!"
-          echo "Cihaz: Samsung SM-T113 (Hybrid-Goyave)"
-
-      - name: "100.000 Line Deep Core Optimization"
-        run: |
-          # Python ile 100.000 satırlık log akışı (Tek seferde, net!)
-          python3 -c "
-          import time
-          for i in range(100000):
-              if i % 1000 == 0:
-                  print(f'>>> Efe-Tech-Progress: %{i//1000} COMPLETED')
-              print(f'Block-{i}: Optimizing T113 Tshark Processor... Status: [ULTRA-FAST]')
-              print(f'ro.efe.tech.performance.node_{i}=MAX')
-          "
-
-      - name: "MKU Security & C# Logic Scan"
-        run: |
-          echo "Aga, MKU Security (C#) katmanları tek tek süzülüyor..."
-          for i in {1..5000}; do
-            echo "MKU-Module-$i: Scanning for Vulnerabilities... [CLEAN]"
-          done
-
-      - name: "Checkout & Final Repack"
+      - name: 1. Repoyu Getir
         uses: actions/checkout@v4
 
-      - name: "Create Artifact (Hata Çözücü)"
-        run: |
-          echo "Aga, operasyon bitti! Dosyalar paketleniyor."
-          mkdir -p build_output
-          echo "Build-ID: Efe-Tech-100K-Mono" > build_output/info.txt
-          echo "SHA256: de0b72a358f8f03f867b507a0672996e35eb08fa6b9f9f2ed10dbe0e7d0a55b9" >> build_output/info.txt
-          
-          # Boş kalmasın diye logları da içine gömelim
-          history > build_output/history.log
-          cd build_output && zip -r ../Efe_Tech_100K_Mono_Artifact.zip .
+      - name: 2. Sistem Araçlarını Kur
+        run: sudo apt-get update && sudo apt-get install -y zip gdown
 
-      - name: "Upload Artifact"
-        uses: actions/upload-artifact@v4
+      - name: 3. İmajları Drive'dan Çek
+        run: |
+          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
+          gdown --id "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" -O boot.img
+          gdown --id "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" -O sprdcp.img
+          gdown --id "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" -O sboot2.bin
+          gdown --id "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" -O sboot.bin
+          gdown --id "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" -O spl.img
+
+      - name: 4. Updater-Script'i Kendi Yazsın (Otomatik)
+        run: |
+          mkdir -p output/META-INF/com/google/android
+          cat <<EOF > output/META-INF/com/google/android/updater-script
+          ui_print("======================================");
+          ui_print("     EFE TECH GALAXY CRUSHER V1      ");
+          ui_print("     --------------------------      ");
+          ui_print("   DEVICE: SAMSUNG TAB 3 LITE VE     ");
+          ui_print("   ROM: ANDROID 10 (PHHUSSON GO)     ");
+          ui_print("   BUILD DATE: \$(date +'%d/%m/%Y')      ");
+          ui_print("======================================");
+
+          ui_print("[1/5] Temizlik Yapiliyor...");
+          unmount("/system");
+          format("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "0", "/system");
+
+          ui_print("[2/5] Bootloader ve Kernel Yaziliyor...");
+          package_extract_file("spl.img", "/dev/block/platform/soc/by-name/spl");
+          package_extract_file("sboot.bin", "/dev/block/platform/soc/by-name/sboot");
+          package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
+
+          ui_print("[3/5] Modem Yukleniyor...");
+          package_extract_file("sprdcp.img", "/dev/block/platform/soc/by-name/sprdcp");
+
+          ui_print("[4/5] Sistem Yaziliyor (Sabredin)...");
+          package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
+
+          ui_print("[5/5] Efe Tech Performans Ayarlari...");
+          mount("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "/system");
+          run_program("/sbin/sh", "-c", "echo 'ro.config.low_ram=true' >> /system/build.prop");
+          run_program("/sbin/sh", "-c", "echo 'dalvik.vm.heapsize=256m' >> /system/build.prop");
+          run_program("/sbin/sh", "-c", "echo 'debug.performance.tuning=1' >> /system/build.prop");
+          unmount("/system");
+
+          ui_print("======================================");
+          ui_print("     KURULUM BASARIYLA BITTI!        ");
+          ui_print("======================================");
+          EOF
+
+      - name: 5. Senin Binary Dosyanı Yerleştir
+        run: |
+          cp scripts/update-binary output/META-INF/com/google/android/
+          chmod 755 output/META-INF/com/google/android/update-binary
+
+      - name: 6. Paketleme
+        run: |
+          mv *.img output/ 2>/dev/null || true
+          mv *.bin output/ 2>/dev/null || true
+          cd output
+          zip -r9 ../EfeTech_T113_AOSP10_Final.zip .
+          cd ..
+
+      - name: 7. GitHub Release'e Yükle (Otomatik)
+        uses: softprops/action-gh-release@v2
         with:
-          name: Efe-Tech-100K-Mono-Artifact
-          path: Efe_Tech_100K_Mono_Artifact.zip
-
-      - name: "Discord Victory Alert"
-        run: |
-          # Webhook varsa gönderir, yoksa loga yazar (Hata vermez!)
-          MESSAGE="🏆 **AGA! TEK VE NET: 100.000 SATIRLIK DEVİR TAMAMLANDI!** \nT113 artık bir canavar. @FeyzulaEfeTuna"
-          if [ -n "${{ secrets.DISCORD_WEBHOOK }}" ]; then
-            curl -H "Content-Type: application/json" -d "{\"content\": \"$MESSAGE\"}" "${{ secrets.DISCORD_WEBHOOK }}"
-          else
-            echo "Discord Webhook bulunamadı ama zafer bizim! @FeyzulaEfeTuna"
-          fi
+          files: EfeTech_T113_AOSP10_Final.zip
+          tag_name: "v1.0.0-EfeTech"
+          name: "Efe Tech Galaxy Crusher V1.0"
+          body: "T113 Samsung Galaxy Tab 3 Lite VE için Android 10 Custom ROM. Kendi update-binary dosyamız ve performans optimizasyonlarıyla hazırlanmıştır."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
