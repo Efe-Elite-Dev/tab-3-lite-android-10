@@ -1,4 +1,4 @@
-name: T113 Android 10 Porting (Block-Based ZIP)
+name: T113 Android 10 Porting (Final Fix)
 
 on:
   workflow_dispatch:
@@ -12,38 +12,32 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Environment & img2sdat Tools
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Setup Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils brotli e2tools p7zip-full
-          pip install gdown --break-system-packages
-          # img2sdat için gerekli tüm kütüphane setini çekiyoruz (Hata almamak için)
+          sudo apt-get install -y zip wget android-sdk-libsparse-utils brotli e2tools p7zip-full
+          pip install gdown
           git clone https://github.com/xpirt/img2sdat.git img2sdat_tool
 
-      - name: Download All Images
+      - name: Download Images
         run: |
-          # 1. Stok System (Driverlar için)
           gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_system.img --fuzzy
-          # 2. Stok Boot (Kernel)
           gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img --fuzzy
-          # 3. Portlanacak Custom ROM (AOSP 10)
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O port_source.img --fuzzy
 
-      - name: Porting & Merging Process
+      - name: Porting & Build Prop
         run: |
-          # Imajları RAW formatına çevir
           simg2img stock_system.img stock_raw.img || mv stock_system.img stock_raw.img
           simg2img port_source.img port_raw.img || mv port_source.img port_raw.img
           
-          # T113 Driverlarını Stoktan Port Rom'a Aktar (Kritik Adım)
-          # Not: Bu kısım sadece temel lib ve firmware'leri aktarır
-          mkdir -p stock_files port_files
-          # (Opsiyonel: Detaylı dosya transferi için e2tools kullanılabilir)
-          
-          # Custom Build.prop Hazırla
           cat <<EOF > build.prop
           ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_AOSP10_v3.0
+          ro.build.display.id=EfeTech_T113_AOSP10_v3.2
           ro.build.version.release=10
           ro.build.version.sdk=29
           ro.product.model=SM-T113NU
@@ -56,40 +50,33 @@ jobs:
           persist.sys.usb.config=mtp,adb
           EOF
           
-          # Build.prop'u port imajına göm
           e2cp build.prop port_raw.img:/build.prop
           e2cp build.prop port_raw.img:/system/build.prop || true
 
-      - name: Convert to Block-Based (.dat.br)
+      - name: Convert to .dat.br (Fixed Arguments)
         run: |
-          # Portlanmış RAW imajı system.new.dat formatına çevir
-          python3 img2sdat_tool/img2sdat.py port_raw.img -o . -v 4 goyavewifi
-          # Brotli ile en yüksek seviyede sıkıştır
+          # Parametre sırasını düzelttik: -p goyavewifi eklendi
+          python3 img2sdat_tool/img2sdat.py port_raw.img -o . -v 4 -p system
+          # Brotli sıkıştırma
           brotli -q 6 system.new.dat -o system.new.dat.br
-          
-      - name: Final Flashable ZIP Structure (As per Screenshots)
+
+      - name: Create TWRP Zip
         run: |
           mkdir -p output/META-INF/com/google/android
-          
-          # Senin repondaki META-INF'i kullan (updater-script burada çok önemli)
           if [ -d "META-INF" ]; then cp -r META-INF/* output/META-INF/; fi
           
-          # Dosyaları yerleştir (Fotoğraftaki gibi)
           mv system.new.dat.br output/
           mv system.transfer.list output/
-          # Bazı ROM'larda system.patch.dat da gerekir, boş olsa da oluşturalım
-          touch output/system.patch.dat 
+          touch output/system.patch.dat
           mv boot.img output/
           
-          # ZIP Paketi
-          cd output && zip -r ../T113_AOSP10_Port_Flashable.zip .
+          cd output && zip -r ../T113_AOSP10_Final_Port.zip .
 
-      - name: Release Ported ROM
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: T113_AOSP10_Port_Flashable.zip
-          tag_name: v3.0-Port
-          name: "SM-T113 AOSP 10 Port (Stable ZIP)"
-          body: "Stok driverlar ile Android 10 AOSP portu birleştirildi. Fotoğraftaki .dat.br yapısı kuruldu."
+          files: T113_AOSP10_Final_Port.zip
+          tag_name: v3.2-Final
+          name: "SM-T113 AOSP 10 Port v3.2"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
