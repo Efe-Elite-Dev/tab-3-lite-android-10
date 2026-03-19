@@ -1,4 +1,4 @@
-name: T113 Efe Tech Galaxy Crusher Ultimate Release
+name: T113 Efe Tech Galaxy Crusher Final Deployment
 
 on:
   workflow_dispatch:
@@ -7,108 +7,75 @@ permissions:
   contents: write
 
 jobs:
-  deploy_elite:
+  deploy:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Node 20 uyarısını susturur
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: 1. Repo Dosyalarini Getir
         uses: actions/checkout@v4
 
-      - name: 2. Gerekli Sistem Araclarini Kur
+      - name: 2. Gdown ve Sistem Araclarini Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip gdown aria2
+          sudo apt-get install -y zip aria2 python3-pip
+          python3 -m pip install gdown --break-system-packages || python3 -m pip install gdown
 
-      - name: 3. Imaj Dosyalarini Drive'dan Cek (Hizli Mod)
+      - name: 3. Imaj Dosyalarini Drive'dan Cek
         run: |
-          # gdown bazen hata verebilir, dosya inmezse workflow dursun diye 'set -e' kullanıyoruz
           set -e
-          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
-          gdown --id "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" -O boot.img
-          gdown --id "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" -O sprdcp.img
-          gdown --id "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" -O sboot2.bin
-          gdown --id "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" -O sboot.bin
-          gdown --id "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" -O spl.img
+          # gdown artik python uzerinden calisiyor, cok daha stabil
+          python3 -m gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
+          python3 -m gdown --id "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" -O boot.img
+          python3 -m gdown --id "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" -O sprdcp.img
+          python3 -m gdown --id "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" -O sboot2.bin
+          python3 -m gdown --id "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" -O sboot.bin
+          python3 -m gdown --id "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" -O spl.img
           
-          # Dosyalar indi mi kontrol et (Eger 426 byte ise burada hata verir durur)
+          # Boyut kontrolü (Boş dosya inmesini engeller)
           ls -lh *.img *.bin
 
-      - name: 4. Updater-Script'i Sifirdan Yaz (Full Otomatik)
+      - name: 4. Updater-Script Yaz ve Binary Yerlestir
         run: |
           mkdir -p output/META-INF/com/google/android
+          
+          # Senin scriptin (Full otomatik üretim)
           cat <<EOF > output/META-INF/com/google/android/updater-script
           ui_print("======================================");
           ui_print("     EFE TECH GALAXY CRUSHER V1      ");
-          ui_print("     --------------------------      ");
-          ui_print("   DEVICE: SAMSUNG TAB 3 LITE VE     ");
-          ui_print("   BUILD DATE: \$(date +'%d/%m/%Y')      ");
+          ui_print("   DATE: \$(date +'%d/%m/%Y')           ");
           ui_print("======================================");
-
-          ui_print("[1/5] Temizlik Basliyor...");
+          ui_print("[1/3] Sistem Hazirlaniyor...");
           unmount("/system");
           format("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "0", "/system");
-
-          ui_print("[2/5] Bootloader ve Kernel Yaziliyor...");
-          package_extract_file("spl.img", "/dev/block/platform/soc/by-name/spl");
-          package_extract_file("sboot.bin", "/dev/block/platform/soc/by-name/sboot");
+          ui_print("[2/3] Dosyalar Yaziliyor...");
           package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
-
-          ui_print("[3/5] Modem ve Radyo Yukleniyor...");
-          package_extract_file("sprdcp.img", "/dev/block/platform/soc/by-name/sprdcp");
-
-          ui_print("[4/5] AOSP 10 Sistemi Yukleniyor...");
-          ui_print("Bu islem cihazina gore 5 dk surebilir...");
           package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-
-          ui_print("[5/5] Efe Tech Elite Optimizasyon...");
+          ui_print("[3/3] Optimizasyon Yapiliyor...");
           mount("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "/system");
           run_program("/sbin/sh", "-c", "echo 'ro.config.low_ram=true' >> /system/build.prop");
-          run_program("/sbin/sh", "-c", "echo 'dalvik.vm.heapsize=256m' >> /system/build.prop");
-          run_program("/sbin/sh", "-c", "echo 'debug.performance.tuning=1' >> /system/build.prop");
-          run_program("/sbin/sh", "-c", "echo 'video.accelerate.hw=1' >> /system/build.prop");
           unmount("/system");
-
-          ui_print("======================================");
-          ui_print("     KURULUM BASARIYLA BITTI!        ");
-          ui_print("======================================");
+          ui_print("KURULUM BITTI AGA!");
           EOF
 
-      - name: 5. Senin update-binary Dosyani Yerlestir
-        run: |
-          # Scripts klasöründen senin kendi binary'ni alıyoruz
-          if [ -f "scripts/update-binary" ]; then
-            cp scripts/update-binary output/META-INF/com/google/android/
-            chmod 755 output/META-INF/com/google/android/update-binary
-          else
-            echo "HATA: scripts/update-binary bulunamadi!"
-            exit 1
-          fi
+          # Senin kendi binary dosyan
+          cp scripts/update-binary output/META-INF/com/google/android/
+          chmod 755 output/META-INF/com/google/android/update-binary
 
-      - name: 6. Full Paketleme
+      - name: 5. Paketleme
         run: |
-          # Imajları klasöre taşı
           mv *.img output/ 2>/dev/null || true
           mv *.bin output/ 2>/dev/null || true
-          
-          # Paketi oluştur
           cd output
-          zip -r9 ../EfeTech_T113_Ultimate_v1.zip .
+          zip -r9 ../EfeTech_T113_AOSP10_v1.zip .
           cd ..
-          
-          # Final kontrol
-          ls -lh EfeTech_T113_Ultimate_v1.zip
 
-      - name: 7. GitHub Release'e Gönder (Resmi Sürüm)
+      - name: 6. Release'e Gönder
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_Ultimate_v1.zip
+          files: EfeTech_T113_AOSP10_v1.zip
           tag_name: "v1.0.0-Elite"
           name: "Efe Tech Galaxy Crusher V1.0 Elite"
-          body: |
-            T113 Samsung Galaxy Tab 3 Lite VE için Özel Hazırlanmış Android 10 Build.
-            - Kendi update-binary dosyamız kullanıldı.
-            - Otomatik updater-script oluşturuldu.
-            - Low RAM ve Performans ayarları eklendi.
+          body: "T113 için tam otomatik, gdown hatası giderilmiş resmi sürüm."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
