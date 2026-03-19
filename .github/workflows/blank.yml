@@ -1,4 +1,4 @@
-name: T113 Efe Tech - Drive Destroyer Build
+name: T113 Efe Tech - Full Link Drive Build
 
 on:
   workflow_dispatch:
@@ -14,50 +14,48 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 2. Gerekli Araclar
-        run: sudo apt-get update && sudo apt-get install -y zip wget
+        run: sudo apt-get update && sudo apt-get install -y zip wget curl
 
-      - name: 3. Imajları Drive'dan Söküp Al (Master Bypass)
+      - name: 3. Full Linkler Üzerinden Drive'ı Zorla
         run: |
           set -e
-          download_drive() {
-            FILE_ID=$1
-            OUT_NAME=$2
-            echo "${OUT_NAME} indiriliyor..."
-            # 1. Adım: Onay kodunu ve çerezleri yakala
-            wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=${FILE_ID}" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p' > /tmp/confirm.txt
+          # Drive onay mekanizmasını tam linkten ayıklayan fonksiyon
+          pull_full_link() {
+            URL=$1
+            FILE=$2
+            echo "${FILE} için tam link zorlanıyor: ${URL}"
             
-            # 2. Adım: Eğer onay kodu varsa onunla, yoksa direkt indir
-            if [ -s /tmp/confirm.txt ]; then
-              CONFIRM=$(cat /tmp/confirm.txt)
-              wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -O "${OUT_NAME}"
-            else
-              wget --no-check-certificate "https://docs.google.com/uc?export=download&id=${FILE_ID}" -O "${OUT_NAME}"
-            fi
-            rm -f /tmp/cookies.txt /tmp/confirm.txt
+            # Linkten ID'yi ayıkla
+            ID=$(echo $URL | sed -r 's/.*d\/([a-zA-Z0-9_-]+).*/\1/; s/.*id=([a-zA-Z0-9_-]+).*/\1/')
+            
+            # Onay kodunu ve çerezleri al (En agresif yöntem)
+            CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=${ID}" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
+            
+            # Dosyayı indir
+            wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${ID}" -O "${FILE}" || wget --no-check-certificate "https://docs.google.com/uc?export=download&id=${ID}" -O "${FILE}"
+            
+            rm -rf /tmp/cookies.txt
           }
 
-          # SENIN LINKLERININ ID'LERI
-          download_drive "1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB" "system.img"
-          download_drive "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" "boot.img"
-          download_drive "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" "sprdcp.img"
-          download_drive "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" "spl.img"
-          download_drive "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" "sboot.img"
+          # SENİN VERDİĞİN FULL LİNKLER
+          pull_full_link "https://drive.google.com/file/d/1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB/view?usp=sharing" "system.img"
+          pull_full_link "https://drive.google.com/file/d/1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv/view?usp=sharing" "boot.img"
+          pull_full_link "https://drive.google.com/file/d/1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3/view?usp=sharing" "sprdcp.img"
+          pull_full_link "https://drive.google.com/file/d/1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP/view?usp=sharing" "spl.img"
+          pull_full_link "https://drive.google.com/file/d/1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y/view?usp=sharing" "sboot.img"
 
-          # DOSYA KONTROLU (Loglarda boyutları gör)
-          echo "--- INDIRILEN DOSYALAR ---"
+          # DOSYA KONTROLÜ (Loglarda boyutları gör aga)
           ls -lh *.img
-          echo "-------------------------"
 
-      - name: 4. Paketleme Hazirligi
+      - name: 4. Paketleme
         run: |
           mkdir -p output/META-INF/com/google/android
           
-          # Binary'yi bul (Yoksa hata vermez)
+          # Binary bulucu (GitHub Actions hata vermesin diye güvenlik önlemi)
           BINARY=$(find . -name "update-binary" | head -n 1)
           if [ -n "$BINARY" ]; then
             cp "$BINARY" output/META-INF/com/google/android/
           else
-            # Eğer repoda yoksa boş bir tane oluşturma, hata verdirme
             touch output/META-INF/com/google/android/update-binary
           fi
 
@@ -72,17 +70,16 @@ jobs:
           
           chmod 755 output/META-INF/com/google/android/update-binary || true
 
-      - name: 5. Paketle
+      - name: 5. Paketle ve Release Gönder
         run: |
           mv *.img output/ 2>/dev/null || true
-          cd output && zip -r9 ../EfeTech_T113_Final_Build.zip . && cd ..
+          cd output && zip -r9 ../EfeTech_FullLink_Build.zip . && cd ..
 
       - name: 6. GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_Final_Build.zip
-          tag_name: "v1.0.0-Final"
-          name: "Efe Tech Final Build"
-          body: "Drive engeli aşılmış, tüm imajların olduğu gerçek sürüm."
+          files: EfeTech_FullLink_Build.zip
+          tag_name: "v1.0.0-FullLink"
+          name: "Efe Tech Full Link Build"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
