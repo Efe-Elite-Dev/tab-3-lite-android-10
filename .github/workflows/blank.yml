@@ -1,4 +1,4 @@
-name: T113 Efe Tech - Final Mega Build
+name: T113 Efe Tech - Debug & Build
 
 on:
   workflow_dispatch:
@@ -16,43 +16,35 @@ jobs:
       - name: 2. Gerekli Araclar
         run: sudo apt-get update && sudo apt-get install -y zip wget
 
-      - name: 3. Imajları Direkt Linkle Cek
+      - name: 3. Imajları Cek ve Boyutlarını Yazdır
         run: |
-          # Drive'dan direkt ham veri çekmeye çalışan en basit komut
-          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB' -O system.img
-          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv' -O boot.img
-          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3' -O sprdcp.img
-          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1wRd-CixOdcYhppNAksnRoNlcyoacFNLk' -O sboot2.bin
-          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y' -O sboot.bin
-          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP' -O spl.img
+          # Drive'dan cekme denemesi
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB' -O system.img || true
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv' -O boot.img || true
+          
+          echo "--- INDIRILEN DOSYALARIN GERCEK BOYUTLARI ---"
+          ls -lh *.img
+          echo "------------------------------------------"
 
-      - name: 4. Paketleme Hazirligi
+      - name: 4. Paketleme
         run: |
           mkdir -p output/META-INF/com/google/android
-          
-          # Binary bulucu
           cp $(find . -name "update-binary" | head -n 1) output/META-INF/com/google/android/ || touch output/META-INF/com/google/android/update-binary
           
           cat <<EOF > output/META-INF/com/google/android/updater-script
-          ui_print("EFE TECH GALAXY CRUSHER");
-          package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
+          ui_print("EFE TECH GALAXY CRUSHER V1");
           package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-          ui_print("Done!");
+          ui_print("Bitti!");
           EOF
           
-          chmod 755 output/META-INF/com/google/android/update-binary || true
-
-      - name: 5. Paketle
-        run: |
           mv *.img output/ 2>/dev/null || true
-          mv *.bin output/ 2>/dev/null || true
-          cd output && zip -r9 ../EfeTech_T113_Mega.zip . && cd ..
+          cd output && zip -r9 ../EfeTech_T113_Debug.zip . && cd ..
 
-      - name: 6. GitHub Release
+      - name: 5. GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_Mega.zip
-          tag_name: "v1.0.0-Mega"
-          name: "Efe Tech Mega Build"
+          files: EfeTech_T113_Debug.zip
+          tag_name: "v1.0.0-Debug"
+          name: "Efe Tech Debug Build"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
