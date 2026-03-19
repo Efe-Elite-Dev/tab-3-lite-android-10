@@ -1,4 +1,4 @@
-name: T113 Android 10 Hybrid Custom Build
+name: T113 Android 10 Hybrid Ultra Build
 
 on:
   workflow_dispatch:
@@ -15,70 +15,87 @@ jobs:
       - name: Install Essential Tools
         run: |
           sudo apt-get update
-          # Yeni Ubuntu sürümleri için doğru paket ismi
-          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils e2tools
-          pip install gdown
+          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils e2tools p7zip-full
+          pip install gdown --break-system-packages
 
-      - name: Download Components
+      - name: Download Components (Hybrid Mode)
         run: |
-          # 1. Kaynak: Stock Boot'un olduğu paket
-          gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_pack.zip
-          unzip stock_pack.zip "boot.img" || unzip stock_pack.zip
-          
+          # 1. Kaynak: Stock Boot'u içeren paket (T113 Kernel için)
+          gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_pack.zip --fuzzy
           # 2. Kaynak: Senin Custom System Imajın (Android 10)
-          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img
+          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img --fuzzy
 
-      - name: Create & Inject Optimized Build Prop
+      - name: Extract Boot and Prepare System
+        run: |
+          # Stock paketten boot.img'yi çek
+          7z e stock_pack.zip boot.img || unzip stock_pack.zip boot.img
+          if [ ! -f "boot.img" ]; then echo "HATA: boot.img bulunamadı!"; exit 1; fi
+
+      - name: Create T113 Optimized Build Prop
         run: |
           cat <<EOF > build.prop
-          # --- EFE TECH T113 ANDROID 10 HYBRID OPTIMIZATION ---
+          # --- EFE TECH T113 (GOYAVEWIFI) ANDROID 10 OPTIMIZATION ---
           ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_A10_Custom_v1.2
+          ro.build.display.id=EfeTech_T113_A10_Stable_v1.5
           ro.build.version.release=10
           ro.build.version.sdk=29
+          
+          # --- T113 HARDWARE SPECIFIC ---
           ro.product.model=SM-T113NU
-          ro.product.brand=samsung
           ro.product.device=goyavewifi
-          # --- ULTRA PERFORMANCE TWEAKS ---
-          ro.config.low_ram=true
-          ro.config.swappiness=150
-          ro.config.zram.support=true
-          ro.config.zram.disksize=512M
+          ro.product.board=universal7330
           ro.sf.hwrotation=270
           ro.sf.lcd_density=160
-          debug.hwui.renderer=opengl
-          dalvik.vm.heapsize=128m
-          persist.sys.usb.config=mtp,adb
-          ro.lineage.version=17.1-EfeTech-A10
-          EOF
           
-          # Imajı RAW formatına çevir ve modla
+          # --- RAM & LOW-END OPTIMIZATION ---
+          ro.config.low_ram=true
+          ro.config.swappiness=180
+          ro.config.zram.support=true
+          ro.config.zram.disksize=512M
+          persist.sys.force_highendgfx=false
+          
+          # --- GRAPHICS & RENDERING ---
+          # Vivante GPU için OpenGL zorlaması
+          debug.hwui.renderer=opengl
+          debug.gr.num_framebuffers=3
+          video.accelerate.hw=1
+          persist.sys.ui.hw=1
+          
+          # --- DALVIK VM (1GB RAM Altı İçin En İyi Ayarlar) ---
+          dalvik.vm.heapstartsize=8m
+          dalvik.vm.heapgrowthlimit=64m
+          dalvik.vm.heapsize=128m
+          dalvik.vm.heaptargetutilization=0.75
+          dalvik.vm.heapminfree=512k
+          dalvik.vm.heapmaxfree=2m
+          
+          # --- SYSTEM ---
+          persist.sys.usb.config=mtp,adb
+          ro.lineage.version=17.1-EfeTech-T113
+          EOF
+
+      - name: Inject & Repack Image
+        run: |
           simg2img custom_system.img system_raw.img || mv custom_system.img system_raw.img
+          # Dosyayı sistemin göbeğine enjekte et
           e2cp build.prop system_raw.img:/build.prop
           e2cp build.prop system_raw.img:/system/build.prop || true
           e2cp build.prop system_raw.img:/system/etc/build.prop || true
-          
-          # Tekrar paketle
           img2simg system_raw.img system.img
 
-      - name: Prepare Final Flashable Package
+      - name: Finalize Package
         run: |
           mkdir output
-          # Stock'tan gelen boot ve bizim modladığımız system
           mv system.img output/
-          mv boot.img output/ || echo "Boot.img bulunamadı, kontrol et!"
-          
-          # Eğer repo'nda META-INF klasörü varsa ekle
+          mv boot.img output/
           if [ -d "META-INF" ]; then cp -r META-INF output/; fi
-          
           cd output && zip -r ../EfeTech_T113_A10_Hybrid.zip .
 
-      - name: Create GitHub Release
+      - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: EfeTech_T113_A10_Hybrid.zip
-          tag_name: v1.5.0-A10-Hybrid
-          name: "T113 Android 10 Hybrid (Stock Boot + Custom System)"
-          body: "Efe Tech: Stock Boot.img ve Android 10 Custom System.img birleştirildi. Full optimize edildi."
+          tag_name: v1.5.0-Final-A10
+          name: "T113 Android 10 Hybrid (Stable)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
