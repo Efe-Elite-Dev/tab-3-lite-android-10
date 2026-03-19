@@ -12,70 +12,78 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - name: 1. Repo Dosyalarini Getir
+      - name: 1. Repoyu Getir
         uses: actions/checkout@v4
 
-      - name: 2. Gdown ve Sistem Araclarini Kur
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zip aria2 python3-pip
-          python3 -m pip install gdown --break-system-packages || python3 -m pip install gdown
+      - name: 2. Gerekli Aracları Kur
+        run: sudo apt-get update && sudo apt-get install -y zip curl
 
-      - name: 3. Imaj Dosyalarini Drive'dan Cek
+      - name: 3. Imajları Drive'dan Cek (Anti-Block Modu)
         run: |
           set -e
-          # gdown artik python uzerinden calisiyor, cok daha stabil
-          python3 -m gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
-          python3 -m gdown --id "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" -O boot.img
-          python3 -m gdown --id "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" -O sprdcp.img
-          python3 -m gdown --id "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" -O sboot2.bin
-          python3 -m gdown --id "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" -O sboot.bin
-          python3 -m gdown --id "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" -O spl.img
+          download_drive_file() {
+            FILE_ID=$1
+            OUT_NAME=$2
+            # Drive'in buyuk dosya onayini gecen curl komutu
+            CONFIRM=$(curl -sc /tmp/cookies.txt "https://drive.google.com/uc?export=download&id=${FILE_ID}" | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
+            curl -Lb /tmp/cookies.txt "https://drive.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -o "${OUT_NAME}"
+          }
+
+          echo "Dosyalar indiriliyor..."
+          download_drive_file "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" "system.img"
+          download_drive_file "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" "boot.img"
+          download_drive_file "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" "sprdcp.img"
+          download_drive_file "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" "sboot2.bin"
+          download_drive_file "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" "sboot.bin"
+          download_drive_file "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" "spl.img"
           
-          # Boyut kontrolü (Boş dosya inmesini engeller)
+          # Boyut kontrolü (Eger 10MB'dan kucukse hata ver, boylece atomu parcalamazsin)
+          for f in system.img boot.img; do
+            if [ $(stat -c%s "$f") -lt 1000000 ]; then
+              echo "HATA: $f duzgun inmedi, cok kucuk!"
+              exit 1
+            fi
+          done
           ls -lh *.img *.bin
 
       - name: 4. Updater-Script Yaz ve Binary Yerlestir
         run: |
           mkdir -p output/META-INF/com/google/android
-          
-          # Senin scriptin (Full otomatik üretim)
           cat <<EOF > output/META-INF/com/google/android/updater-script
           ui_print("======================================");
           ui_print("     EFE TECH GALAXY CRUSHER V1      ");
-          ui_print("   DATE: \$(date +'%d/%m/%Y')           ");
+          ui_print("   BUILD: \$(date +'%d/%m/%Y')          ");
           ui_print("======================================");
-          ui_print("[1/3] Sistem Hazirlaniyor...");
+          ui_print("[1/3] Temizlik Yapiliyor...");
           unmount("/system");
           format("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "0", "/system");
-          ui_print("[2/3] Dosyalar Yaziliyor...");
+          ui_print("[2/3] Yazilim Yukleniyor...");
           package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
           package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-          ui_print("[3/3] Optimizasyon Yapiliyor...");
+          ui_print("[3/3] Performans Ayarlari...");
           mount("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "/system");
           run_program("/sbin/sh", "-c", "echo 'ro.config.low_ram=true' >> /system/build.prop");
           unmount("/system");
-          ui_print("KURULUM BITTI AGA!");
+          ui_print("ISLEM TAMAM AGA!");
           EOF
 
-          # Senin kendi binary dosyan
           cp scripts/update-binary output/META-INF/com/google/android/
           chmod 755 output/META-INF/com/google/android/update-binary
 
-      - name: 5. Paketleme
+      - name: 5. Paketleme ve Release
         run: |
           mv *.img output/ 2>/dev/null || true
           mv *.bin output/ 2>/dev/null || true
           cd output
-          zip -r9 ../EfeTech_T113_AOSP10_v1.zip .
+          zip -r9 ../EfeTech_T113_V1_Official.zip .
           cd ..
 
-      - name: 6. Release'e Gönder
+      - name: 6. GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_AOSP10_v1.zip
-          tag_name: "v1.0.0-Elite"
-          name: "Efe Tech Galaxy Crusher V1.0 Elite"
-          body: "T113 için tam otomatik, gdown hatası giderilmiş resmi sürüm."
+          files: EfeTech_T113_V1_Official.zip
+          tag_name: "v1.0.0-Official"
+          name: "Efe Tech Galaxy Crusher Official"
+          body: "T113 için Drive engeli aşılmış, gerçek boyutlu resmi sürüm."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
