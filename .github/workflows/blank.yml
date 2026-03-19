@@ -1,85 +1,72 @@
-name: T113 Android 10 Ultimate Stable Port
+name: T113 Android 10 Auto-Build & Optimize
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ "main", "master" ] # Kodu her güncellediğinde otomatik başlar
+  workflow_dispatch: # Manuel başlatma butonu da durur
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Repo Checkout
         uses: actions/checkout@v4
 
-      - name: Gerekli Araclar
+      - name: Sistem Araclarini Hazirla
         run: |
-          sudo apt update
-          sudo apt install -y python3 python3-pip zip unzip img2simg simg2img e2fsprogs
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip zip unzip img2simg simg2img e2fsprogs p7zip-full
 
       - name: Dosyalari Drive'dan Cek
         run: |
           pip install gdown
-          # Boot.img (Kernel)
+          # Boot.img (Senin Kernel)
           gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img
-          # Custom System.img (Android 10)
+          # Android 10 System.img
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img
 
-      - name: Klasör Yapısı ve Imaj Isleme
+      - name: Imaj Isleme ve Yetkilendirme
         run: |
+          # Klasörleri oluştur ve root yetkisi ver
           sudo mkdir -p update/system
           sudo mkdir -p update/META-INF/com/google/android
+          sudo chmod -R 777 update/
           
-          # Imajı RAW formatına cevir ve Mount et
+          # Sparse imajı RAW'a çevir (Android standartı)
           simg2img custom_system.img custom_raw.img || cp custom_system.img custom_raw.img
+          
+          # Mount et ve dosyaları aktar
           sudo mkdir -p /mnt/custom
           sudo mount -o loop custom_raw.img /mnt/custom
-          
-          # Dosyaları kopyala ve tam yetki ver
           sudo cp -rp /mnt/custom/* update/system/
           sudo umount /mnt/custom
+          
+          # Tüm sistem dosyalarına işlem yapabilmek için izinleri aç
           sudo chmod -R 777 update/system/
 
-      - name: 10 Kritik XML ve Optimizasyon
+      - name: 10 Kritik XML Enjeksiyonu
         run: |
           cd update/system
           sudo mkdir -p etc/vintf etc/permissions etc/sysconfig res/xml
           
-          # 1. manifest.xml (VINTF)
+          # XML'leri 'tee' ile yönetici olarak basıyoruz (Hata almaz)
           echo '<manifest version="1.0" type="framework"><hal format="hidl"><name>android.hardware.graphics.allocator</name><transport>hwbinder</transport><version>2.0</version></hal></manifest>' | sudo tee etc/vintf/manifest.xml > /dev/null
-
-          # 2. compatibility_matrix.xml
           echo '<compatibility-matrix version="1.0" type="framework"><kernel version="3.10.x" /><sepolicy><kernel-sepolicy-version>30</kernel-sepolicy-version></sepolicy></compatibility-matrix>' | sudo tee etc/vintf/compatibility_matrix.xml > /dev/null
-
-          # 3. audio_policy (Ses Fix)
           echo '<audioPolicyConfiguration version="1.0" xmlns:xi="http://www.w3.org/2001/XInclude"><modules><module name="primary" halVersion="2.0"><attachedDevices><item>Speaker</item></attachedDevices></module></modules></audioPolicyConfiguration>' | sudo tee etc/audio_policy_configuration.xml > /dev/null
-
-          # 4. media_codecs (Video Fix)
           echo '<MediaCodecs><Decoders><MediaCodec name="OMX.google.h264.decoder" type="video/avc" /></Decoders></MediaCodecs>' | sudo tee etc/media_codecs.xml > /dev/null
-
-          # 5. media_profiles
           echo '<MediaSettings><CamcorderProfiles cameraId="0"><EncoderProfile quality="480p" fileFormat="mp4" duration="30" /></CamcorderProfiles></MediaSettings>' | sudo tee etc/media_profiles.xml > /dev/null
-
-          # 6. power_profile (Batarya Fix)
           echo '<device name="Android"><item name="cpu.speeds">1200000</item><item name="battery.capacity">3600</item></device>' | sudo tee res/xml/power_profile.xml > /dev/null
-
-          # 7. platform.xml (SD Kart Izni)
           echo '<permissions><permission name="android.permission.READ_EXTERNAL_STORAGE" /><assign-permission name="android.permission.WRITE_EXTERNAL_STORAGE" uid="media_rw" /></permissions>' | sudo tee etc/permissions/platform.xml > /dev/null
-
-          # 8. handheld_core (Donanim)
           echo '<permissions><feature name="android.hardware.touchscreen" /><feature name="android.hardware.wifi" /></permissions>' | sudo tee etc/permissions/handheld_core_hardware.xml > /dev/null
-
-          # 9. tablet_core (Tablet Modu)
           echo '<permissions><feature name="android.hardware.type.tablet" /></permissions>' | sudo tee etc/permissions/tablet_core_hardware.xml > /dev/null
-
-          # 10. sysconfig (GMS Fix)
           echo '<config><allow-in-power-save package="com.google.android.gms" /></config>' | sudo tee etc/sysconfig/sysconfig.xml > /dev/null
 
-      - name: Build.prop ve Low RAM Optimizasyonu
+      - name: Super Low-RAM & Akicilik Fix
         run: |
+          # build.prop'a cihazı uçuracak ayarlar
           sudo chmod 777 update/system/build.prop
           cat <<EOF | sudo tee -a update/system/build.prop
-          # --- EFE TECH OPTIMIZATION ---
-          ro.build.version.release=10
-          ro.build.version.sdk=29
+          # EFE TECH T113 ANDROID 10 SPEED FIX
           ro.config.low_ram=true
           ro.lmk.critical_upgrade=true
           ro.lmk.upgrade_pressure=40
@@ -87,35 +74,37 @@ jobs:
           dalvik.vm.heapgrowthlimit=64m
           dalvik.vm.heapsize=128m
           ro.sf.lcd_density=160
-          ro.sf.hwrotation=270
+          hwui.disable_vsync=true
+          persist.sys.force_highendgfx=false
           EOF
 
-      - name: Yükleyici Hazirla
+      - name: TWRP Yukleyici Script
         run: |
           cp boot.img update/
           cat <<EOF > update/META-INF/com/google/android/update-binary
           #!/sbin/sh
           ui_print "--------------------------------------"
-          ui_print "   T113 Android 10 Elite Port Stable  "
+          ui_print "   T113 Android 10 EFE ELITE PORT     "
           ui_print "--------------------------------------"
           mount /system
-          ui_print "Sistem yaziliyor..."
+          ui_print "- Sistem Dosyalari Aktariliyor..."
           cp -rp /tmp/update/system/* /system/
-          ui_print "Kernel yaziliyor..."
+          ui_print "- Kernel Yaziliyor..."
           dd if=/tmp/update/boot.img of=/dev/block/platform/sdio_emmc/by-name/BOOT
-          ui_print "Islem Tamam!"
+          ui_print "- Onbellek Temizleniyor..."
+          rm -rf /data/dalvik-cache/*
           unmount /system
+          ui_print "Kurulum Basarili!"
           EOF
           chmod +x update/META-INF/com/google/android/update-binary
 
-      - name: Zip Paketle ve Upload
+      - name: Final ZIP Paketleme
         run: |
           cd update
-          zip -r9 ../T113_A10_Stable_Port.zip .
-          cd ..
+          zip -r9 ../T113_A10_Efe_Elite.zip .
           
-      - name: Artifact Yukle
+      - name: ROM'u Artifact Olarak Yayınla
         uses: actions/upload-artifact@v4
         with:
-          name: T113-A10-ROM
-          path: T113_A10_Stable_Port.zip
+          name: T113-A10-Elite-ROM
+          path: T113_A10_Efe_Elite.zip
