@@ -1,4 +1,4 @@
-name: T113 Efe Tech - No Check Build
+name: T113 Efe Tech - Final Mega Build
 
 on:
   workflow_dispatch:
@@ -14,58 +14,45 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 2. Gerekli Araclar
-        run: sudo apt-get update && sudo apt-get install -y zip wget curl
+        run: sudo apt-get update && sudo apt-get install -y zip wget
 
-      - name: 3. Dosyalari Drive'dan Cek (Sorgusuz Sualsiz)
+      - name: 3. Imajları Direkt Linkle Cek
         run: |
-          download_drive() {
-            FILE_ID=$1
-            OUT_NAME=$2
-            # Onay kodunu yakala ve direkt indir, hata verse de devam et
-            CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=${FILE_ID}" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
-            wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -O "${OUT_NAME}" || true
-            rm -rf /tmp/cookies.txt
-          }
+          # Drive'dan direkt ham veri çekmeye çalışan en basit komut
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB' -O system.img
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv' -O boot.img
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3' -O sprdcp.img
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1wRd-CixOdcYhppNAksnRoNlcyoacFNLk' -O sboot2.bin
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y' -O sboot.bin
+          wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP' -O spl.img
 
-          download_drive "1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB" "system.img"
-          download_drive "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" "boot.img"
-          download_drive "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" "sprdcp.img"
-          download_drive "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" "sboot2.bin"
-          download_drive "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" "sboot.bin"
-          download_drive "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" "spl.img"
-
-      - name: 4. Kurulum Dosyalarini Hazirla
+      - name: 4. Paketleme Hazirligi
         run: |
           mkdir -p output/META-INF/com/google/android
           
-          # Updater-script'i olustur
+          # Binary bulucu
+          cp $(find . -name "update-binary" | head -n 1) output/META-INF/com/google/android/ || touch output/META-INF/com/google/android/update-binary
+          
           cat <<EOF > output/META-INF/com/google/android/updater-script
-          ui_print("================================");
-          ui_print("   EFE TECH GALAXY CRUSHER V1   ");
-          ui_print("================================");
+          ui_print("EFE TECH GALAXY CRUSHER");
           package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
           package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
           ui_print("Done!");
           EOF
+          
+          chmod 755 output/META-INF/com/google/android/update-binary || true
 
-          # Senin binary dosyani kopyala
-          cp scripts/update-binary output/META-INF/com/google/android/
-          chmod 755 output/META-INF/com/google/android/update-binary
-
-      - name: 5. Paketleme
+      - name: 5. Paketle
         run: |
           mv *.img output/ 2>/dev/null || true
           mv *.bin output/ 2>/dev/null || true
-          cd output
-          zip -r9 ../EfeTech_T113_Build.zip .
-          cd ..
+          cd output && zip -r9 ../EfeTech_T113_Mega.zip . && cd ..
 
-      - name: 6. GitHub Release (Her Koşulda Yayınla)
+      - name: 6. GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_Build.zip
-          tag_name: "v1.0.0-Custom"
-          name: "Efe Tech Build"
-          body: "T113 Build - Boyut kontrolü kaldırıldı."
+          files: EfeTech_T113_Mega.zip
+          tag_name: "v1.0.0-Mega"
+          name: "Efe Tech Mega Build"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
