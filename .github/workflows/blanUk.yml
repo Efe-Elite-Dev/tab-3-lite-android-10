@@ -15,41 +15,30 @@ jobs:
       - name: Install Essential Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils e2tools p7zip-full
+          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils e2tools
           pip install gdown --break-system-packages
 
-      - name: Download Components (Hybrid Mode)
+      - name: Download Components (Direct IMG)
         run: |
-          # Drive onay sayfasını geçmek için --fuzzy ve --confirm ekledik
-          gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_pack.zip --fuzzy
-          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img --fuzzy
+          # 1. Boot Image (Daha önce çalışan ID)
+          gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img --fuzzy
           
-          # Dosya boyutlarını kontrol et
-          ls -lh stock_pack.zip
-          ls -lh custom_system.img
-
-      - name: Extract Boot (Safe Mode)
-        run: |
-          # 7z başarısız olursa bile hata kodunu yutması için '|| true' ekledik
-          7z e stock_pack.zip boot.img -y || unzip -o stock_pack.zip boot.img || true
+          # 2. Custom System Image (Senin Android 10 dosyan)
+          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O system_source.img --fuzzy
           
-          # Eğer boot.img hala yoksa, belki adı farklıdır veya zip bozuktur. 
-          # Dosyaları listele ki hatayı görelim.
-          if [ ! -f "boot.img" ]; then
-            echo "Kritik Hata: boot.img çıkarılamadı. Zip dosyası eksik inmiş olabilir."
-            7z l stock_pack.zip || ls -R
-            exit 1
-          fi
+          # Kontrol
+          ls -lh boot.img system_source.img
 
       - name: Create T113 Optimized Build Prop
         run: |
           cat <<EOF > build.prop
-          # --- EFE TECH T113 ANDROID 10 HYBRID ---
+          # --- EFE TECH T113 ANDROID 10 FULL OPTIMIZE ---
           ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_A10_Stable_v1.5
+          ro.build.display.id=EfeTech_T113_A10_v1.7_Final
           ro.build.version.release=10
           ro.build.version.sdk=29
           ro.product.model=SM-T113NU
+          ro.product.brand=samsung
           ro.product.device=goyavewifi
           ro.sf.hwrotation=270
           ro.sf.lcd_density=160
@@ -65,10 +54,15 @@ jobs:
 
       - name: Inject & Repack Image
         run: |
-          simg2img custom_system.img system_raw.img || mv custom_system.img system_raw.img
+          # Sparse ise RAW'a çevir, değilse devam et
+          simg2img system_source.img system_raw.img || mv system_source.img system_raw.img
+          
+          # build.prop dosyasını imaja göm
           e2cp build.prop system_raw.img:/build.prop
           e2cp build.prop system_raw.img:/system/build.prop || true
           e2cp build.prop system_raw.img:/system/etc/build.prop || true
+          
+          # Tekrar Sparse yap (Cihazın daha rahat okuması için)
           img2simg system_raw.img system.img
 
       - name: Finalize Package
@@ -76,14 +70,17 @@ jobs:
           mkdir output
           mv system.img output/
           mv boot.img output/
+          # Eğer varsa flash scriptlerini (META-INF) ekle
           if [ -d "META-INF" ]; then cp -r META-INF output/; fi
-          cd output && zip -r ../EfeTech_T113_A10_Hybrid.zip .
+          
+          cd output && zip -r ../EfeTech_T113_A10_Final_IMG.zip .
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_A10_Hybrid.zip
-          tag_name: v1.5.0-Final-A10
-          name: "T113 Android 10 Hybrid (Stable)"
+          files: EfeTech_T113_A10_Final_IMG.zip
+          tag_name: v1.7.0-A10-Final
+          name: "T113 Android 10 Hybrid (All IMG Mode)"
+          body: "Bütün kaynaklar .img olarak işlendi. T113 için full optimize Android 10 paketi hazır!"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
