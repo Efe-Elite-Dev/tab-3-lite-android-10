@@ -1,4 +1,4 @@
-name: T113 Android 10 Porting (Final Fix)
+name: T113 Android 10 Porting (Magic Fix)
 
 on:
   workflow_dispatch:
@@ -29,15 +29,15 @@ jobs:
           gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_system.img --fuzzy
           gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img --fuzzy
           gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O port_source.img --fuzzy
+          # Dosya kontrolü (0 byte ise hata ver)
+          ls -lh *.img
 
       - name: Porting & Build Prop
         run: |
-          simg2img stock_system.img stock_raw.img || mv stock_system.img stock_raw.img
-          simg2img port_source.img port_raw.img || mv port_source.img port_raw.img
-          
+          # Önce build.prop hazırlayalım
           cat <<EOF > build.prop
           ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_AOSP10_v3.2
+          ro.build.display.id=EfeTech_T113_AOSP10_v3.3
           ro.build.version.release=10
           ro.build.version.sdk=29
           ro.product.model=SM-T113NU
@@ -49,15 +49,22 @@ jobs:
           debug.hwui.renderer=opengl
           persist.sys.usb.config=mtp,adb
           EOF
-          
-          e2cp build.prop port_raw.img:/build.prop
-          e2cp build.prop port_raw.img:/system/build.prop || true
 
-      - name: Convert to .dat.br (Fixed Arguments)
+          # EĞER port_source.img Sparse ise RAW'a çevirip build.prop gömmemiz lazım
+          # Sonra img2sdat için tekrar Sparse yapmamız gerekebilir.
+          # Şimdilik en güvenli yol: RAW üzerinde çalışıp img2sdat'a RAW vermek (Script destekliyorsa)
+          simg2img port_source.img port_working.img || cp port_source.img port_working.img
+          
+          e2cp build.prop port_working.img:/build.prop
+          e2cp build.prop port_working.img:/system/build.prop || true
+          
+          # img2sdat Sparse Magic beklediği için tekrar çeviriyoruz
+          img2simg port_working.img system.img
+
+      - name: Convert to .dat.br (Sparse Input)
         run: |
-          # Parametre sırasını düzelttik: -p goyavewifi eklendi
-          python3 img2sdat_tool/img2sdat.py port_raw.img -o . -v 4 -p system
-          # Brotli sıkıştırma
+          # Artık system.img bir Sparse Image (Magic: 0xED26FF3A)
+          python3 img2sdat_tool/img2sdat.py system.img -o . -v 4 -p system
           brotli -q 6 system.new.dat -o system.new.dat.br
 
       - name: Create TWRP Zip
@@ -76,7 +83,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: T113_AOSP10_Final_Port.zip
-          tag_name: v3.2-Final
-          name: "SM-T113 AOSP 10 Port v3.2"
+          tag_name: v3.3-Magic
+          name: "SM-T113 AOSP 10 Port v3.3"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
