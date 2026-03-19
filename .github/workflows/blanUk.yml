@@ -1,81 +1,84 @@
-name: T113 Efe Tech - ADB Drive Plan
+name: T113 Android 10 Hybrid Custom Build
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: 1. Repoyu Getir
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Gerekli Araclar (Python & Gdown)
+      - name: Install Essential Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip zip wget
-          pip3 install --upgrade gdown --break-system-packages
+          # Yeni Ubuntu sürümleri için doğru paket ismi
+          sudo apt-get install -y python3-pip zip wget android-sdk-libsparse-utils e2tools
+          pip install gdown
 
-      - name: 3. Drive'dan Dosyaları ADB Planıyla Söküp Al
+      - name: Download Components
         run: |
-          # Gdown ile onay mekanizmasını bypass ederek indirme
-          # --fuzzy: Linkten ID'yi kendi ayıklar
-          # --remaining-ok: Büyük dosyalarda kopma olursa devam eder
+          # 1. Kaynak: Stock Boot'un olduğu paket
+          gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_pack.zip
+          unzip stock_pack.zip "boot.img" || unzip stock_pack.zip
           
-          gdown --fuzzy "https://drive.google.com/file/d/1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB/view?usp=sharing" -O system.img --remaining-ok
-          gdown --fuzzy "https://drive.google.com/file/d/1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv/view?usp=sharing" -O boot.img --remaining-ok
-          gdown --fuzzy "https://drive.google.com/file/d/1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3/view?usp=sharing" -O sprdcp.img --remaining-ok
-          gdown --fuzzy "https://drive.google.com/file/d/1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP/view?usp=sharing" -O spl.img --remaining-ok
-          gdown --fuzzy "https://drive.google.com/file/d/1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y/view?usp=sharing" -O sboot.img --remaining-ok
+          # 2. Kaynak: Senin Custom System Imajın (Android 10)
+          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img
 
-          echo "--- GERCEK BOYUT KONTROLU ---"
-          ls -lh *.img
-          
-          # Kritik Kontrol: Eğer system.img 1MB'dan küçükse indirme başarısızdır
-          SIZE=$(stat -c%s "system.img")
-          if [ $SIZE -lt 1000000 ]; then
-            echo "HATA: Dosyalar hala kucuk iniyor. Google Drive bot engeli aktif!"
-            # exit 1  # Burayı bilerek yoruma aldım, ne olursa olsun release çıksın istiyorsan kalsın
-          fi
-
-      - name: 4. Paketleme Hazirligi
+      - name: Create & Inject Optimized Build Prop
         run: |
-          mkdir -p output/META-INF/com/google/android
-          
-          # Binary bulucu (Repoda scripts içinde arar)
-          BINARY=$(find . -name "update-binary" | head -n 1)
-          if [ -n "$BINARY" ]; then
-            cp "$BINARY" output/META-INF/com/google/android/
-          else
-            # Yoksa dummy oluştur (hata vermemesi için)
-            touch output/META-INF/com/google/android/update-binary
-          fi
-
-          cat <<EOF > output/META-INF/com/google/android/updater-script
-          ui_print("================================");
-          ui_print("   EFE TECH GALAXY CRUSHER V1   ");
-          ui_print("================================");
-          package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
-          package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-          ui_print("DONE AGA!");
+          cat <<EOF > build.prop
+          # --- EFE TECH T113 ANDROID 10 HYBRID OPTIMIZATION ---
+          ro.build.id=QP1A.190711.020
+          ro.build.display.id=EfeTech_T113_A10_Custom_v1.2
+          ro.build.version.release=10
+          ro.build.version.sdk=29
+          ro.product.model=SM-T113NU
+          ro.product.brand=samsung
+          ro.product.device=goyavewifi
+          # --- ULTRA PERFORMANCE TWEAKS ---
+          ro.config.low_ram=true
+          ro.config.swappiness=150
+          ro.config.zram.support=true
+          ro.config.zram.disksize=512M
+          ro.sf.hwrotation=270
+          ro.sf.lcd_density=160
+          debug.hwui.renderer=opengl
+          dalvik.vm.heapsize=128m
+          persist.sys.usb.config=mtp,adb
+          ro.lineage.version=17.1-EfeTech-A10
           EOF
           
-          chmod 755 output/META-INF/com/google/android/update-binary || true
+          # Imajı RAW formatına çevir ve modla
+          simg2img custom_system.img system_raw.img || mv custom_system.img system_raw.img
+          e2cp build.prop system_raw.img:/build.prop
+          e2cp build.prop system_raw.img:/system/build.prop || true
+          e2cp build.prop system_raw.img:/system/etc/build.prop || true
+          
+          # Tekrar paketle
+          img2simg system_raw.img system.img
 
-      - name: 5. Paketle ve Release Gönder
+      - name: Prepare Final Flashable Package
         run: |
-          mv *.img output/ 2>/dev/null || true
-          cd output && zip -r9 ../EfeTech_ADB_Plan_Build.zip . && cd ..
+          mkdir output
+          # Stock'tan gelen boot ve bizim modladığımız system
+          mv system.img output/
+          mv boot.img output/ || echo "Boot.img bulunamadı, kontrol et!"
+          
+          # Eğer repo'nda META-INF klasörü varsa ekle
+          if [ -d "META-INF" ]; then cp -r META-INF output/; fi
+          
+          cd output && zip -r ../EfeTech_T113_A10_Hybrid.zip .
 
-      - name: 6. GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_ADB_Plan_Build.zip
-          tag_name: "v1.0.0-ADB-Plan"
-          name: "Efe Tech ADB Plan Build"
-          body: "Gdown kütüphanesi ve ADB indirme simülasyonu kullanıldı."
+          files: EfeTech_T113_A10_Hybrid.zip
+          tag_name: v1.5.0-A10-Hybrid
+          name: "T113 Android 10 Hybrid (Stock Boot + Custom System)"
+          body: "Efe Tech: Stock Boot.img ve Android 10 Custom System.img birleştirildi. Full optimize edildi."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
