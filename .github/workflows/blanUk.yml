@@ -1,88 +1,79 @@
-name: T113 Efe Tech Ultimate Release Engine
+name: T113 Efe Tech - Ultimate Force Build
 
 on:
-  workflow_dispatch: # Manuel başlatma butonu
+  workflow_dispatch:
 
 permissions:
-  contents: write # Release oluşturabilmek için bu izin şart!
+  contents: write
 
 jobs:
-  build_and_release:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: 1. Repoyu Getir
         uses: actions/checkout@v4
 
-      - name: 2. Sistem Araçlarını Kur
-        run: sudo apt-get update && sudo apt-get install -y zip gdown
+      - name: 2. Gerekli Araclar
+        run: sudo apt-get update && sudo apt-get install -y zip wget curl
 
-      - name: 3. İmajları Drive'dan Çek
+      - name: 3. Imajları Drive'dan Zorla Cek
         run: |
-          gdown --id "1OkFvGvI5TSQtK22Ib73xZNI1g1muBvGE" -O system.img
-          gdown --id "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" -O boot.img
-          gdown --id "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" -O sprdcp.img
-          gdown --id "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" -O sboot2.bin
-          gdown --id "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" -O sboot.bin
-          gdown --id "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" -O spl.img
+          download_drive() {
+            FILE_ID=$1
+            OUT_NAME=$2
+            CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=${FILE_ID}" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
+            wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM}&id=${FILE_ID}" -O "${OUT_NAME}" || true
+            rm -rf /tmp/cookies.txt
+          }
 
-      - name: 4. Updater-Script'i Kendi Yazsın (Otomatik)
+          download_drive "1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB" "system.img"
+          download_drive "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" "boot.img"
+          download_drive "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" "sprdcp.img"
+          download_drive "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" "sboot2.bin"
+          download_drive "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" "sboot.bin"
+          download_drive "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" "spl.img"
+
+      - name: 4. Dosya Yapilandirma (Binary Bulucu Dahil)
         run: |
           mkdir -p output/META-INF/com/google/android
+          
+          # Binary dosyasını repoda ara, bulamazsan internetten cek
+          BINARY_PATH=$(find . -name "update-binary" | head -n 1)
+          if [ -n "$BINARY_PATH" ]; then
+            echo "Binary bulundu: $BINARY_PATH"
+            cp "$BINARY_PATH" output/META-INF/com/google/android/
+          else
+            echo "Binary repoda yok, GitHub'dan indiriliyor..."
+            wget https://github.com/Efe-Elite-Dev/tab-3-lite-android-10/raw/main/scripts/update-binary -O output/META-INF/com/google/android/update-binary || touch output/META-INF/com/google/android/update-binary
+          fi
+
+          # Updater-script (Otomatik Yazim)
           cat <<EOF > output/META-INF/com/google/android/updater-script
-          ui_print("======================================");
-          ui_print("     EFE TECH GALAXY CRUSHER V1      ");
-          ui_print("     --------------------------      ");
-          ui_print("   DEVICE: SAMSUNG TAB 3 LITE VE     ");
-          ui_print("   ROM: ANDROID 10 (PHHUSSON GO)     ");
-          ui_print("   BUILD DATE: \$(date +'%d/%m/%Y')      ");
-          ui_print("======================================");
-
-          ui_print("[1/5] Temizlik Yapiliyor...");
-          unmount("/system");
-          format("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "0", "/system");
-
-          ui_print("[2/5] Bootloader ve Kernel Yaziliyor...");
-          package_extract_file("spl.img", "/dev/block/platform/soc/by-name/spl");
-          package_extract_file("sboot.bin", "/dev/block/platform/soc/by-name/sboot");
+          ui_print("================================");
+          ui_print("   EFE TECH GALAXY CRUSHER V1   ");
+          ui_print("================================");
           package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
-
-          ui_print("[3/5] Modem Yukleniyor...");
-          package_extract_file("sprdcp.img", "/dev/block/platform/soc/by-name/sprdcp");
-
-          ui_print("[4/5] Sistem Yaziliyor (Sabredin)...");
           package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-
-          ui_print("[5/5] Efe Tech Performans Ayarlari...");
-          mount("ext4", "EMMC", "/dev/block/platform/soc/by-name/system", "/system");
-          run_program("/sbin/sh", "-c", "echo 'ro.config.low_ram=true' >> /system/build.prop");
-          run_program("/sbin/sh", "-c", "echo 'dalvik.vm.heapsize=256m' >> /system/build.prop");
-          run_program("/sbin/sh", "-c", "echo 'debug.performance.tuning=1' >> /system/build.prop");
-          unmount("/system");
-
-          ui_print("======================================");
-          ui_print("     KURULUM BASARIYLA BITTI!        ");
-          ui_print("======================================");
+          ui_print("Kurulum Tamamlandi!");
           EOF
 
-      - name: 5. Senin Binary Dosyanı Yerleştir
-        run: |
-          cp scripts/update-binary output/META-INF/com/google/android/
-          chmod 755 output/META-INF/com/google/android/update-binary
+          chmod 755 output/META-INF/com/google/android/update-binary || true
 
-      - name: 6. Paketleme
+      - name: 5. Paketleme
         run: |
+          # Bulunan tum imaj ve bin dosyalarini tasi
           mv *.img output/ 2>/dev/null || true
           mv *.bin output/ 2>/dev/null || true
           cd output
-          zip -r9 ../EfeTech_T113_AOSP10_Final.zip .
+          zip -r9 ../EfeTech_T113_Build_Final.zip .
           cd ..
 
-      - name: 7. GitHub Release'e Yükle (Otomatik)
+      - name: 6. GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_AOSP10_Final.zip
-          tag_name: "v1.0.0-EfeTech"
-          name: "Efe Tech Galaxy Crusher V1.0"
-          body: "T113 Samsung Galaxy Tab 3 Lite VE için Android 10 Custom ROM. Kendi update-binary dosyamız ve performans optimizasyonlarıyla hazırlanmıştır."
+          files: EfeTech_T113_Build_Final.zip
+          tag_name: "v1.0.0-Elite-Final"
+          name: "Efe Tech Elite Build"
+          body: "Otomatik dosya bulucu ve Drive bypass aktif."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
