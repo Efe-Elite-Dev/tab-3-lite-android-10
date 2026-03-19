@@ -1,99 +1,160 @@
-name: T113 Android 10 Final Build
+name: T113 Android 10 Ultimate XML Port Build
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Setup Tools
+      - name: Gerekli Araçları Kur
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zip wget android-sdk-libsparse-utils brotli e2tools p7zip-full
+          sudo apt update
+          sudo apt install -y python3 python3-pip zip unzip img2simg simg2img e2fsprogs p7zip-full
+
+      - name: Google Drive'dan Imajları Çek
+        run: |
           pip install gdown
-          git clone https://github.com/xpirt/img2sdat.git img2sdat_tool
+          # Stok system.img (Sürücüler için - yedek)
+          gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_system.img || true
+          # Stok boot.img (Kernel)
+          gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img
+          # Android 10 Custom system.img
+          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O custom_system.img
 
-      - name: Download Images
+      - name: ROM Klasör Yapısını Kur
         run: |
-          gdown --id 1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB -O stock_system.img --fuzzy
-          gdown --id 1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv -O boot.img --fuzzy
-          gdown --id 1dF1k6XNHfycHEbVQMWCaTvBBNki7-SOL -O port_source.img --fuzzy
+          mkdir -p T113_Android10_ROM/system/etc/vintf
+          mkdir -p T113_Android10_ROM/system/vendor/etc/permissions
+          mkdir -p T113_Android10_ROM/META-INF/com/google/android
+          
+          # Custom imajı mount edip dosyaları kopyalıyoruz
+          simg2img custom_system.img custom_raw.img || cp custom_system.img custom_raw.img
+          sudo mkdir -p /mnt/custom
+          sudo mount -o loop custom_raw.img /mnt/custom || true
+          sudo cp -rp /mnt/custom/* T113_Android10_ROM/system/ || echo "Sistem kopyalama kismi basarisiz ama devam ediliyor"
+          sudo umount /mnt/custom || true
 
-      - name: Porting & Build Prop Injection
+      - name: 10 Kritik XML Dosyasini Olustur (Donanim & Sistem Koprusu)
         run: |
-          # build.prop'u senin attığın 8.1 değerlerine göre Android 10 için hazırladık
-          cat <<EOF > custom_build.prop
-          # --- EFE TECH T113 ANDROID 10 PORT ---
-          ro.build.id=QP1A.190711.020
-          ro.build.display.id=EfeTech_T113_A10_v3.4
-          ro.build.version.release=10
-          ro.build.version.sdk=29
-          ro.product.model=SM-T113NU
-          ro.product.brand=samsung
-          ro.product.name=goyavewifi
-          ro.product.device=goyavewifi
-          ro.product.manufacturer=samsung
-          ro.product.cpu.abi=armeabi-v7a
-          ro.product.cpu.abilist=armeabi-v7a,armeabi
-          # T113 Donanım Fixleri
-          ro.sf.hwrotation=270
-          ro.sf.lcd_density=160
-          ro.opengles.version=131072
-          ro.product.hardware=TSHARK_V1.0.0
-          # Performans & RAM
-          ro.config.low_ram=true
-          ro.config.swappiness=130
-          ro.config.zram.support=true
-          ro.config.zram.disksize=512M
-          dalvik.vm.heapstartsize=5m
-          dalvik.vm.heapgrowthlimit=48m
-          dalvik.vm.heapsize=128m
-          persist.sys.usb.config=mtp,adb
+          cd T113_Android10_ROM/system/
+          
+          # 1. manifest.xml (VINTF/Treble Uyumluluk Bildirgesi)
+          cat <<EOF > etc/vintf/manifest.xml
+          <manifest version="1.0" type="framework">
+              <hal format="hidl"><name>android.hardware.graphics.allocator</name><transport>hwbinder</transport><version>2.0</version></hal>
+          </manifest>
           EOF
 
-          # Port imajını düzenle
-          simg2img port_source.img port_working.img || cp port_source.img port_working.img
-          # Bazı ROM'larda dosya adı sadece 'build' olabilir, ikisini de deniyoruz
-          e2cp custom_build.prop port_working.img:/build || true
-          e2cp custom_build.prop port_working.img:/system/build.prop || true
-          
-          # img2sdat için tekrar Sparse yap
-          img2simg port_working.img system.img
+          # 2. compatibility_matrix.xml (Eski Kernel - Yeni Sistem Dengesi)
+          cat <<EOF > etc/vintf/compatibility_matrix.xml
+          <compatibility-matrix version="1.0" type="framework">
+              <kernel version="3.10.x" />
+              <sepolicy><kernel-sepolicy-version>30</kernel-sepolicy-version></sepolicy>
+          </compatibility-matrix>
+          EOF
 
-      - name: Convert to .dat.br
+          # 3. audio_policy_configuration.xml (Ses Sürücüleri)
+          cat <<EOF > etc/audio_policy_configuration.xml
+          <audioPolicyConfiguration version="1.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+              <modules><module name="primary" halVersion="2.0"><attachedDevices><item>Speaker</item></attachedDevices></module></modules>
+          </audioPolicyConfiguration>
+          EOF
+
+          # 4. media_codecs.xml (Video Oynatma/Donanım Hızlandırma)
+          cat <<EOF > etc/media_codecs.xml
+          <MediaCodecs>
+              <Decoders><MediaCodec name="OMX.google.h264.decoder" type="video/avc" /></Decoders>
+          </MediaCodecs>
+          EOF
+
+          # 5. media_profiles.xml (Kamera ve Video Kayıt Özellikleri)
+          cat <<EOF > etc/media_profiles.xml
+          <MediaSettings>
+              <CamcorderProfiles cameraId="0"><EncoderProfile quality="480p" fileFormat="mp4" duration="30" /></CamcorderProfiles>
+          </MediaSettings>
+          EOF
+
+          # 6. power_profile.xml (Batarya Tüketimi ve CPU Frekansları)
+          mkdir -p res/xml && cat <<EOF > res/xml/power_profile.xml
+          <device name="Android">
+              <item name="cpu.speeds">1200000</item><item name="battery.capacity">3600</item>
+          </device>
+          EOF
+
+          # 7. platform.xml (SD Kart ve Sistem İzinleri)
+          cat <<EOF > etc/permissions/platform.xml
+          <permissions>
+              <permission name="android.permission.READ_EXTERNAL_STORAGE" /><assign-permission name="android.permission.WRITE_EXTERNAL_STORAGE" uid="media_rw" />
+          </permissions>
+          EOF
+
+          # 8. handheld_core_hardware.xml (Tablet/Telefon Donanım Bildirisi)
+          cat <<EOF > etc/permissions/handheld_core_hardware.xml
+          <permissions>
+              <feature name="android.hardware.touchscreen" /><feature name="android.hardware.wifi" />
+          </permissions>
+          EOF
+
+          # 9. tablet_core_hardware.xml (Tablet Arayüzünü Zorlama)
+          cat <<EOF > etc/permissions/tablet_core_hardware.xml
+          <permissions>
+              <feature name="android.hardware.type.tablet" />
+          </permissions>
+          EOF
+
+          # 10. sysconfig.xml (Arka Plan Servisleri ve RAM Optimizasyonu)
+          mkdir -p etc/sysconfig && cat <<EOF > etc/sysconfig/sysconfig.xml
+          <config>
+              <allow-in-power-save package="com.google.android.gms" />
+          </config>
+          EOF
+
+      - name: Build.prop Enjeksiyonu
         run: |
-          python3 img2sdat_tool/img2sdat.py system.img -o . -v 4 -p system
-          brotli -q 6 system.new.dat -o system.new.dat.br
+          cd T113_Android10_ROM/system/
+          cat <<EOF >> build.prop
+          # EFE ELITE DEV - ANDROID 10 HYBRID
+          ro.build.version.release=10
+          ro.build.version.sdk=29
+          ro.product.model=SM-T113
+          ro.sf.lcd_density=160
+          ro.config.low_ram=true
+          EOF
 
-      - name: Create TWRP Zip
+      - name: Yükleyici (Update Binary) Scriptini Yaz
         run: |
-          mkdir -p output/META-INF/com/google/android
-          # Repodaki META-INF'i çek (updater-script burada olmalı!)
-          if [ -d "META-INF" ]; then cp -r META-INF/* output/META-INF/; fi
+          cat <<EOF > T113_Android10_ROM/META-INF/com/google/android/update-binary
+          #!/sbin/sh
+          ui_print "*****************************************"
+          ui_print "* T113 Android 10 Hybrid Custom ROM *"
+          ui_print "* Geliştirici: Efe Elite Dev            *"
+          ui_print "*****************************************"
+          ui_print "- Sistem temizleniyor..."
+          mount /system
+          rm -rf /system/*
+          ui_print "- Yeni sistem kopyalaniyor..."
+          cp -rp /tmp/update/system/* /system/
+          ui_print "- Kernel yaziliyor..."
+          dd if=/tmp/update/boot.img of=/dev/block/platform/sdio_emmc/by-name/BOOT
+          ui_print "- Kurulum Bitti!"
+          unmount /system
+          EOF
+          chmod +x T113_Android10_ROM/META-INF/com/google/android/update-binary
           
-          mv system.new.dat.br output/
-          mv system.transfer.list output/
-          touch output/system.patch.dat
-          mv boot.img output/
-          
-          cd output && zip -r ../T113_A10_Port_v3.4.zip .
+          # Boot imajini ZIP klasorune tasi
+          cp boot.img T113_Android10_ROM/
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: TWRP ROM Zipini Paketle
+        run: |
+          cd T113_Android10_ROM
+          zip -r9 ../T113_Android10_Elite_Port.zip .
+
+      - name: ROM'u GitHub'a Yukle
+        uses: actions/upload-artifact@v4
         with:
-          files: T113_A10_Port_v3.4.zip
-          tag_name: v3.4-A10
-          name: "SM-T113 Android 10 Port (8.1 Based Config)"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: T113-Android10-Elite-Port
+          path: T113_Android10_Elite_Port.zip
