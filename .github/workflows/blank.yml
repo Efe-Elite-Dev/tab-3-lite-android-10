@@ -1,4 +1,4 @@
-name: T113 Efe Tech - Absolute Power Build
+name: T113 Efe Tech - GitHub Internal Build
 
 on:
   workflow_dispatch:
@@ -16,36 +16,25 @@ jobs:
       - name: 2. Gerekli Araclar
         run: sudo apt-get update && sudo apt-get install -y zip wget curl
 
-      - name: 3. Drive Güvenlik Duvarını Parçala ve İndir
+      - name: 3. Dosyaları GitHub Üzerinden Çek (Sıfır Engel)
         run: |
-          download_force() {
-            ID=$1
-            NAME=$2
-            echo "${NAME} için Drive kapısı zorlanıyor..."
-            # Birinci deneme: Onay kodu alarak
-            CONFIRM=$(curl -sc /tmp/cookies.txt "https://drive.google.com/uc?export=download&id=${ID}" | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
-            curl -Lb /tmp/cookies.txt "https://drive.google.com/uc?export=download&confirm=${CONFIRM}&id=${ID}" -o "${NAME}"
-            
-            # İkinci deneme (Eğer ilkinde sadece HTML indiyse):
-            if [ $(stat -c%s "${NAME}") -lt 10000 ]; then
-               echo "İlk deneme başarısız, wget ile sızılıyor..."
-               wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id='${ID} -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=${ID}" -O "${NAME}"
-            fi
-            rm -rf /tmp/cookies.txt
-          }
+          # NOT: Eğer dosyaları başka bir GitHub Releases'e manuel yüklediysen 
+          # linkleri buraya yapıştır. GitHub'dan çekmek Drive'dan 100 kat daha güvenlidir.
+          
+          echo "Dosyalar indiriliyor..."
+          # Örnek kullanım (Kendi gerçek dosyalarının linklerini buraya koy aga):
+          wget "https://github.com/KULLANICI_ADIN/REPO_ADIN/releases/download/TAG/system.img" -O system.img || true
+          wget "https://github.com/KULLANICI_ADIN/REPO_ADIN/releases/download/TAG/boot.img" -O boot.img || true
+          wget "https://github.com/KULLANICI_ADIN/REPO_ADIN/releases/download/TAG/sprdcp.img" -O sprdcp.img || true
+          wget "https://github.com/KULLANICI_ADIN/REPO_ADIN/releases/download/TAG/sboot.bin" -O sboot.bin || true
+          wget "https://github.com/KULLANICI_ADIN/REPO_ADIN/releases/download/TAG/sboot2.bin" -O sboot2.bin || true
+          wget "https://github.com/KULLANICI_ADIN/REPO_ADIN/releases/download/TAG/spl.img" -O spl.img || true
 
-          download_force "1VFLsX7Vkm1a0lv1GXKtLMKuyg20ey1XB" "system.img"
-          download_force "1ykNZsdc9DxcFtwz7SLGRSGkAro5Z25Jv" "boot.img"
-          download_force "1VQkPk84l9n3Uc04aYp3I_eoJIePj06E3" "sprdcp.img"
-          download_force "1wRd-CixOdcYhppNAksnRoNlcyoacFNLk" "sboot2.bin"
-          download_force "1tvkKWkinJUKKLXDwW0x2YRq5GXriqX3y" "sboot.bin"
-          download_force "1lWWUXpxXMihPgMbgg12wH93kXsjD-6BP" "spl.img"
-
-      - name: 4. Yapılandırma ve Binary
+      - name: 4. Kurulum Paketini Hazırla
         run: |
           mkdir -p output/META-INF/com/google/android
           
-          # Binary'yi her yerde ara, bulamazsan yarat (Workflow ölmesin)
+          # Binary bul (Yoksa yarat, workflow patlamasın)
           BINARY=$(find . -name "update-binary" | head -n 1)
           if [ -n "$BINARY" ]; then
             cp "$BINARY" output/META-INF/com/google/android/
@@ -54,27 +43,27 @@ jobs:
           fi
 
           cat <<EOF > output/META-INF/com/google/android/updater-script
-          ui_print("EFE TECH GALAXY CRUSHER V1");
-          ui_print("----------------------------");
+          ui_print("==================================");
+          ui_print("   EFE TECH INTERNAL BUILD V1    ");
+          ui_print("==================================");
           package_extract_file("boot.img", "/dev/block/platform/soc/by-name/boot");
           package_extract_file("system.img", "/dev/block/platform/soc/by-name/system");
-          ui_print("DONE AGA!");
+          ui_print("KURULUM TAMAM AGA!");
           EOF
           
           chmod 755 output/META-INF/com/google/android/update-binary || true
 
-      - name: 5. Paketle
+      - name: 5. Paketleme
         run: |
           mv *.img output/ 2>/dev/null || true
           mv *.bin output/ 2>/dev/null || true
-          cd output && zip -r9 ../EfeTech_T113_Ultimate.zip . && cd ..
+          cd output && zip -r9 ../EfeTech_T113_Internal_Final.zip . && cd ..
 
-      - name: 6. GitHub Release (YAYINLA!)
+      - name: 6. GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: EfeTech_T113_Ultimate.zip
-          tag_name: "v1.0.0-Ultimate"
-          name: "Efe Tech Ultimate Build"
-          body: "Her engeli aşan, kontrolsüz ve en güçlü sürüm."
+          files: EfeTech_T113_Internal_Final.zip
+          tag_name: "v1.0.0-Internal"
+          name: "Efe Tech Internal Build"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
